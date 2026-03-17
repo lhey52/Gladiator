@@ -13,5 +13,6 @@ struct GladiatorApp: App {
         WindowGroup {
             ContentView()
         }
+        test
     }
 }
