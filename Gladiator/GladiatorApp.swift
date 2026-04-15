@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct GladiatorApp: App {
@@ -13,6 +14,6 @@ struct GladiatorApp: App {
         WindowGroup {
             ContentView()
         }
-        test
+        .modelContainer(for: Session.self)
     }
 }

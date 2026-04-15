@@ -35,16 +35,6 @@
 			path = Gladiator;
 			sourceTree = "<group>";
 		};
-		9C433E3F2F69F7C7008FC68A /* GladiatorTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = GladiatorTests;
-			sourceTree = "<group>";
-		};
-		9C433E492F69F7C7008FC68A /* GladiatorUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = GladiatorUITests;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,8 +66,6 @@
 			isa = PBXGroup;
 			children = (
 				9C433E312F69F7C6008FC68A /* Gladiator */,
-				9C433E3F2F69F7C7008FC68A /* GladiatorTests */,
-				9C433E492F69F7C7008FC68A /* GladiatorUITests */,
 				9C433E302F69F7C6008FC68A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -130,9 +118,6 @@
 			dependencies = (
 				9C433E3E2F69F7C7008FC68A /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				9C433E3F2F69F7C7008FC68A /* GladiatorTests */,
-			);
 			name = GladiatorTests;
 			packageProductDependencies = (
 			);
@@ -152,9 +137,6 @@
 			);
 			dependencies = (
 				9C433E482F69F7C7008FC68A /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				9C433E492F69F7C7008FC68A /* GladiatorUITests */,
 			);
 			name = GladiatorUITests;
 			packageProductDependencies = (
