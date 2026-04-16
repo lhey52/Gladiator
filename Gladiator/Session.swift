@@ -37,6 +37,8 @@ final class Session {
     var sessionTypeRaw: String
     var notes: String
     var createdAt: Date
+    @Relationship(deleteRule: .cascade, inverse: \FieldValue.session)
+    var fieldValues: [FieldValue] = []
 
     init(
         date: Date = .now,

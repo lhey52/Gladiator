@@ -4,21 +4,25 @@
 //
 
 import SwiftUI
+import SwiftData
+import Charts
 
 struct DashboardView: View {
-    @StateObject private var viewModel = DashboardViewModel()
+    @Query(sort: [SortDescriptor(\Session.date, order: .reverse)])
+    private var sessions: [Session]
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
-
                 ScrollView {
                     VStack(spacing: 20) {
                         header
-                        headlineCard
-                        statGrid
-                        recentSessions
+                        SummarySection(sessions: sessions)
+                        TypeBreakdownSection(sessions: sessions)
+                        ActivityChartSection(sessions: sessions)
+                        ScatterPlotCardView()
+                        RecentSessionsSection(sessions: Array(sessions.prefix(5)))
                         Color.clear.frame(height: 8)
                     }
                     .padding(.horizontal, 20)
@@ -32,7 +36,7 @@ struct DashboardView: View {
     private var header: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(viewModel.driverName)
+                Text("DASHBOARD")
                     .font(.system(size: 12, weight: .bold))
                     .tracking(2)
                     .foregroundColor(Theme.textSecondary)
@@ -43,9 +47,7 @@ struct DashboardView: View {
             }
             Spacer()
             ZStack {
-                Circle()
-                    .fill(Theme.surface)
-                    .frame(width: 44, height: 44)
+                Circle().fill(Theme.surface).frame(width: 44, height: 44)
                 Circle()
                     .stroke(Theme.accent.opacity(0.6), lineWidth: 1)
                     .frame(width: 44, height: 44)
@@ -56,94 +58,261 @@ struct DashboardView: View {
         }
         .padding(.top, 8)
     }
+}
 
-    private var headlineCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+// MARK: - Summary
+
+private struct SummarySection: View {
+    let sessions: [Session]
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM dd · HH:mm"
+        return f
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("NEXT SESSION", systemImage: "location.north.line.fill")
+                Label("OVERVIEW", systemImage: "square.grid.2x2.fill")
                     .font(.system(size: 11, weight: .bold))
                     .tracking(1.5)
                     .foregroundColor(Theme.accent)
                 Spacer()
-                Text("LIVE")
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(1)
-                    .foregroundColor(Theme.accent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Theme.accent.opacity(0.15))
-                    .overlay(
-                        Capsule().stroke(Theme.accent.opacity(0.5), lineWidth: 1)
-                    )
-                    .clipShape(Capsule())
             }
 
-            Text(viewModel.nextEvent)
-                .font(.system(size: 22, weight: .heavy))
-                .foregroundColor(Theme.textPrimary)
-
-            Divider().background(Theme.hairline)
-
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(viewModel.headlineStat.label)
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(1.5)
-                        .foregroundColor(Theme.textSecondary)
-                    HStack(alignment: .lastTextBaseline, spacing: 4) {
-                        Text(viewModel.headlineStat.value)
-                            .font(.system(size: 48, weight: .heavy, design: .rounded))
-                            .foregroundColor(Theme.textPrimary)
-                        Text(".\(viewModel.headlineStat.unit)")
-                            .font(.system(size: 24, weight: .heavy, design: .rounded))
-                            .foregroundColor(Theme.accent)
-                    }
-                }
-                Spacer()
-                if let delta = viewModel.headlineStat.delta {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("Δ")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Theme.textSecondary)
-                        Text(delta)
-                            .font(.system(size: 18, weight: .heavy, design: .rounded))
-                            .foregroundColor(viewModel.headlineStat.deltaPositive ? Theme.accent : .red)
-                    }
-                }
+            HStack(alignment: .top, spacing: 14) {
+                totalTile
+                latestTile
             }
         }
         .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Theme.surface)
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Theme.accent.opacity(0.35), lineWidth: 1)
         )
-        .shadow(color: Theme.accent.opacity(0.18), radius: 18, x: 0, y: 0)
+        .shadow(color: Theme.accent.opacity(0.18), radius: 18)
     }
 
-    private var statGrid: some View {
+    private var totalTile: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("TOTAL SESSIONS")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            Text("\(sessions.count)")
+                .font(.system(size: 54, weight: .heavy, design: .rounded))
+                .foregroundColor(Theme.textPrimary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var latestTile: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("MOST RECENT")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            if let latest = sessions.first {
+                Text(latest.trackName.isEmpty ? "Untitled Track" : latest.trackName)
+                    .font(.system(size: 17, weight: .heavy))
+                    .foregroundColor(Theme.textPrimary)
+                    .lineLimit(1)
+                Text(Self.dayFormatter.string(from: latest.date).uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1)
+                    .foregroundColor(Theme.accent)
+            } else {
+                Text("—")
+                    .font(.system(size: 32, weight: .heavy, design: .rounded))
+                    .foregroundColor(Theme.textTertiary)
+                Text("NO SESSIONS")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1)
+                    .foregroundColor(Theme.textTertiary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Type breakdown
+
+private struct TypeBreakdownSection: View {
+    let sessions: [Session]
+
+    private func count(_ type: SessionType) -> Int {
+        sessions.filter { $0.sessionType == type }.count
+    }
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("TELEMETRY")
+            Text("BY TYPE")
                 .font(.system(size: 11, weight: .bold))
                 .tracking(2)
                 .foregroundColor(Theme.textSecondary)
                 .padding(.leading, 4)
 
-            LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
-                spacing: 12
-            ) {
-                ForEach(viewModel.tiles) { tile in
-                    StatTileView(tile: tile)
+            HStack(spacing: 12) {
+                ForEach(SessionType.allCases) { type in
+                    TypeTile(type: type, count: count(type))
                 }
             }
         }
     }
+}
 
-    private var recentSessions: some View {
+private struct TypeTile: View {
+    let type: SessionType
+    let count: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: type.systemImage)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Theme.accent)
+                Spacer()
+                Text(type.shortLabel)
+                    .font(.system(size: 9, weight: .heavy))
+                    .tracking(1)
+                    .foregroundColor(Theme.textTertiary)
+            }
+            Text("\(count)")
+                .font(.system(size: 32, weight: .heavy, design: .rounded))
+                .foregroundColor(Theme.textPrimary)
+            Text(type.rawValue.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .tracking(1.2)
+                .foregroundColor(Theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Activity chart
+
+private struct ActivityChartSection: View {
+    let sessions: [Session]
+
+    private struct DayBucket: Identifiable {
+        let id: Date
+        let date: Date
+        let count: Int
+    }
+
+    private var buckets: [DayBucket] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: sessions) { session in
+            calendar.startOfDay(for: session.date)
+        }
+        return grouped
+            .map { DayBucket(id: $0.key, date: $0.key, count: $0.value.count) }
+            .sorted { $0.date < $1.date }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("ACTIVITY")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(2)
+                    .foregroundColor(Theme.textSecondary)
+                Spacer()
+                Text("\(sessions.count) SESSIONS")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.accent)
+            }
+            .padding(.horizontal, 4)
+
+            chartCard
+        }
+    }
+
+    @ViewBuilder
+    private var chartCard: some View {
+        VStack {
+            if buckets.isEmpty {
+                Text("LOG A SESSION TO SEE ACTIVITY")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textTertiary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 180)
+            } else {
+                chart
+                    .frame(height: 180)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    private var chart: some View {
+        Chart(buckets) { bucket in
+            BarMark(
+                x: .value("Date", bucket.date, unit: .day),
+                y: .value("Sessions", bucket.count)
+            )
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [Theme.accent, Theme.accent.opacity(0.4)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .cornerRadius(4)
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading) { _ in
+                AxisGridLine().foregroundStyle(Theme.hairline)
+                AxisValueLabel()
+                    .foregroundStyle(Theme.textTertiary)
+                    .font(.system(size: 10, weight: .bold))
+            }
+        }
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisGridLine().foregroundStyle(Theme.hairline)
+                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                    .foregroundStyle(Theme.textTertiary)
+                    .font(.system(size: 10, weight: .bold))
+            }
+        }
+    }
+}
+
+// MARK: - Recent sessions
+
+private struct RecentSessionsSection: View {
+    let sessions: [Session]
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM dd"
+        return f
+    }()
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("RECENT SESSIONS")
@@ -151,73 +320,55 @@ struct DashboardView: View {
                     .tracking(2)
                     .foregroundColor(Theme.textSecondary)
                 Spacer()
-                Text("\(viewModel.sessionCount) TOTAL")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(1.5)
-                    .foregroundColor(Theme.accent)
             }
             .padding(.horizontal, 4)
 
-            VStack(spacing: 0) {
-                ForEach(Array(viewModel.recent.enumerated()), id: \.element.id) { index, session in
-                    RecentSessionRow(session: session)
-                    if index < viewModel.recent.count - 1 {
-                        Divider().background(Theme.hairline).padding(.leading, 16)
-                    }
-                }
+            if sessions.isEmpty {
+                emptyCard
+            } else {
+                list
             }
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Theme.surface)
-            )
         }
     }
-}
 
-private struct StatTileView: View {
-    let tile: DashboardViewModel.StatTile
+    private var emptyCard: some View {
+        Text("NO RECENT SESSIONS")
+            .font(.system(size: 11, weight: .bold))
+            .tracking(1.5)
+            .foregroundColor(Theme.textTertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 28)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
+            )
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(tile.label)
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
-
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(tile.value)
-                    .font(.system(size: 30, weight: .heavy, design: .rounded))
-                    .foregroundColor(Theme.textPrimary)
-                Text(tile.unit)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Theme.textTertiary)
-            }
-
-            if let delta = tile.delta {
-                HStack(spacing: 4) {
-                    Image(systemName: tile.deltaPositive ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 9, weight: .bold))
-                    Text(delta)
-                        .font(.system(size: 11, weight: .bold))
+    private var list: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
+                NavigationLink {
+                    SessionDetailView(session: session)
+                } label: {
+                    RecentSessionRow(
+                        session: session,
+                        dateText: Self.dateFormatter.string(from: session.date).uppercased()
+                    )
                 }
-                .foregroundColor(tile.deltaPositive ? Theme.accent : .red.opacity(0.9))
+                .buttonStyle(.plain)
+                if index < sessions.count - 1 {
+                    Divider().background(Theme.hairline).padding(.leading, 16)
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
         )
     }
 }
 
 private struct RecentSessionRow: View {
-    let session: DashboardViewModel.RecentSession
+    let session: Session
+    let dateText: String
 
     var body: some View {
         HStack(spacing: 14) {
@@ -227,26 +378,20 @@ private struct RecentSessionRow: View {
                 .shadow(color: Theme.accent.opacity(0.5), radius: 4)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(session.track)
+                Text(session.trackName.isEmpty ? "Untitled Track" : session.trackName)
                     .font(.system(size: 15, weight: .heavy))
                     .foregroundColor(Theme.textPrimary)
-                Text("\(session.date) · \(session.laps) LAPS")
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundColor(Theme.textSecondary)
+                HStack(spacing: 6) {
+                    Image(systemName: session.sessionType.systemImage)
+                        .font(.system(size: 9, weight: .bold))
+                    Text("\(dateText) · \(session.sessionType.rawValue.uppercased())")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.8)
+                }
+                .foregroundColor(Theme.textSecondary)
             }
 
             Spacer()
-
-            VStack(alignment: .trailing, spacing: 3) {
-                Text(session.bestLap)
-                    .font(.system(size: 17, weight: .heavy, design: .rounded))
-                    .foregroundColor(Theme.accent)
-                Text("BEST")
-                    .font(.system(size: 9, weight: .bold))
-                    .tracking(1)
-                    .foregroundColor(Theme.textTertiary)
-            }
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .bold))
@@ -258,5 +403,6 @@ private struct RecentSessionRow: View {
 
 #Preview {
     DashboardView()
+        .modelContainer(for: [Session.self, CustomField.self, FieldValue.self], inMemory: true)
         .preferredColorScheme(.dark)
 }

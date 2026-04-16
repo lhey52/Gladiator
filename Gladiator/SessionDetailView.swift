@@ -29,6 +29,9 @@ struct SessionDetailView: View {
                 VStack(spacing: 18) {
                     headerCard
                     metaCard
+                    if !sortedFieldValues.isEmpty {
+                        customFieldsCard
+                    }
                     if !session.notes.trimmingCharacters(in: .whitespaces).isEmpty {
                         notesCard
                     }
@@ -104,6 +107,40 @@ struct SessionDetailView: View {
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Theme.surface)
+        )
+    }
+
+    private var sortedFieldValues: [FieldValue] {
+        session.fieldValues.sorted { $0.fieldName.localizedCompare($1.fieldName) == .orderedAscending }
+    }
+
+    private var customFieldsCard: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("CUSTOM DATA")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.8)
+                    .foregroundColor(Theme.accent)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+
+            ForEach(Array(sortedFieldValues.enumerated()), id: \.element.id) { index, fv in
+                if index > 0 {
+                    Divider().background(Theme.hairline)
+                }
+                detailRow(label: fv.fieldName.uppercased(), value: fv.value)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
         )
     }
 

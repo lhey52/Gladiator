@@ -14,6 +14,7 @@ struct SessionsView: View {
     @State private var searchText: String = ""
     @State private var typeFilter: SessionType? = nil
     @State private var showingAdd: Bool = false
+    @FocusState private var searchFocused: Bool
 
     private var filteredSessions: [Session] {
         sessions.filter { session in
@@ -31,6 +32,7 @@ struct SessionsView: View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
+                    .dismissKeyboardOnTap()
 
                 VStack(spacing: 0) {
                     searchBar
@@ -39,7 +41,7 @@ struct SessionsView: View {
                 }
             }
             .navigationTitle("Sessions")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -67,6 +69,8 @@ struct SessionsView: View {
                 .foregroundColor(Theme.textPrimary)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
+                .focused($searchFocused)
+                .submitLabel(.done)
             if !searchText.isEmpty {
                 Button {
                     searchText = ""

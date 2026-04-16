@@ -6,28 +6,49 @@
 import SwiftUI
 import SwiftData
 
+private enum SessionFormField: Hashable {
+    case track
+    case custom(String)
+    case notes
+}
+
 struct AddSessionView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
+    private var customFields: [CustomField]
 
     @State private var date: Date = .now
     @State private var trackName: String = ""
     @State private var sessionType: SessionType = .practice
     @State private var notes: String = ""
+    @State private var fieldEntries: [String: String] = [:]
+    @FocusState private var focusedField: SessionFormField?
 
     private var canSave: Bool {
         !trackName.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private var allFields: [SessionFormField] {
+        var result: [SessionFormField] = [.track]
+        for field in customFields {
+            result.append(.custom(field.name))
+        }
+        result.append(.notes)
+        return result
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
+                    .dismissKeyboardOnTap()
                 formScroll
             }
             .navigationTitle("New Session")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarContent }
+            .toolbar { navToolbar }
+            .keyboardToolbar(focusedField: $focusedField, fields: allFields)
         }
         .preferredColorScheme(.dark)
     }
@@ -38,6 +59,7 @@ struct AddSessionView: View {
                 trackCard
                 dateCard
                 typeCard
+                customFieldCards
                 notesCard
             }
             .padding(20)
@@ -45,7 +67,7 @@ struct AddSessionView: View {
     }
 
     @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
+    private var navToolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             Button("Cancel") { dismiss() }
                 .foregroundColor(Theme.textSecondary)
@@ -69,6 +91,7 @@ struct AddSessionView: View {
             .foregroundColor(Theme.textPrimary)
             .textInputAutocapitalization(.words)
             .autocorrectionDisabled()
+            .focused($focusedField, equals: .track)
         }
     }
 
@@ -101,6 +124,17 @@ struct AddSessionView: View {
         }
     }
 
+    @ViewBuilder
+    private var customFieldCards: some View {
+        ForEach(customFields) { field in
+            CustomFieldInput(
+                field: field,
+                value: bindingForField(field),
+                focusedField: $focusedField
+            )
+        }
+    }
+
     private var notesCard: some View {
         fieldCard(label: "NOTES", alignment: .leading) {
             ZStack(alignment: .topLeading) {
@@ -117,8 +151,16 @@ struct AddSessionView: View {
                     .foregroundColor(Theme.textPrimary)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 120)
+                    .focused($focusedField, equals: .notes)
             }
         }
+    }
+
+    private func bindingForField(_ field: CustomField) -> Binding<String> {
+        Binding(
+            get: { fieldEntries[field.name, default: ""] },
+            set: { fieldEntries[field.name] = $0 }
+        )
     }
 
     private func save() {
@@ -129,11 +171,19 @@ struct AddSessionView: View {
             notes: notes
         )
         modelContext.insert(session)
+
+        for field in customFields {
+            let raw = fieldEntries[field.name, default: ""].trimmingCharacters(in: .whitespaces)
+            guard !raw.isEmpty else { continue }
+            let fv = FieldValue(fieldName: field.name, fieldType: field.fieldType, value: raw, session: session)
+            modelContext.insert(fv)
+        }
+
         dismiss()
     }
 
     @ViewBuilder
-    private func fieldCard<Content: View>(
+    func fieldCard<Content: View>(
         label: String,
         alignment: HorizontalAlignment = .leading,
         @ViewBuilder content: () -> Content
@@ -145,6 +195,47 @@ struct AddSessionView: View {
                 .foregroundColor(Theme.accent)
             content()
                 .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+}
+
+private struct CustomFieldInput: View {
+    let field: CustomField
+    @Binding var value: String
+    var focusedField: FocusState<SessionFormField?>.Binding
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: field.fieldType.systemImage)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Theme.accent)
+                Text(field.name.uppercased())
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.8)
+                    .foregroundColor(Theme.accent)
+            }
+            TextField(
+                "",
+                text: $value,
+                prompt: Text("Enter \(field.fieldType.rawValue.lowercased())").foregroundColor(Theme.textTertiary)
+            )
+            .font(.system(size: 18, weight: .heavy))
+            .foregroundColor(Theme.textPrimary)
+            .keyboardType(field.fieldType == .number ? .decimalPad : .default)
+            .autocorrectionDisabled()
+            .focused(focusedField, equals: .custom(field.name))
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -192,5 +283,5 @@ private struct TypeButton: View {
 
 #Preview {
     AddSessionView()
-        .modelContainer(for: Session.self, inMemory: true)
+        .modelContainer(for: [CustomField.self, FieldValue.self, Session.self], inMemory: true)
 }
