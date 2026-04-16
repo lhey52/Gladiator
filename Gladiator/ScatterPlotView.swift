@@ -22,21 +22,29 @@ struct ScatterPlotView: View {
     @State private var showingYPicker: Bool = false
     @State private var navigateToSession: Session?
 
-    private var numberFields: [CustomField] {
-        allFields.filter { $0.fieldType == .number }
+    private var plottableFields: [CustomField] {
+        allFields.filter { $0.fieldType.isPlottable }
     }
 
     private var xFieldName: String {
         let name = storedXField
-        if !name.isEmpty, numberFields.contains(where: { $0.name == name }) { return name }
-        return numberFields.first?.name ?? ""
+        if !name.isEmpty, plottableFields.contains(where: { $0.name == name }) { return name }
+        return plottableFields.first?.name ?? ""
     }
 
     private var yFieldName: String {
         let name = storedYField
-        if !name.isEmpty, numberFields.contains(where: { $0.name == name }) { return name }
-        if numberFields.count >= 2 { return numberFields[1].name }
-        return numberFields.first?.name ?? ""
+        if !name.isEmpty, plottableFields.contains(where: { $0.name == name }) { return name }
+        if plottableFields.count >= 2 { return plottableFields[1].name }
+        return plottableFields.first?.name ?? ""
+    }
+
+    private var xFieldType: FieldType {
+        plottableFields.first(where: { $0.name == xFieldName })?.fieldType ?? .number
+    }
+
+    private var yFieldType: FieldType {
+        plottableFields.first(where: { $0.name == yFieldName })?.fieldType ?? .number
     }
 
     private var points: [ScatterPoint] {
@@ -169,7 +177,7 @@ struct ScatterPlotView: View {
 
     @ViewBuilder
     private var chartArea: some View {
-        if numberFields.isEmpty {
+        if plottableFields.isEmpty {
             emptyState(message: "ADD NUMBER FIELDS IN SETTINGS")
         } else if points.isEmpty {
             emptyState(message: "NO SESSIONS WITH DATA FOR BOTH FIELDS")
@@ -253,8 +261,8 @@ struct ScatterPlotView: View {
             Divider().background(Theme.hairline)
 
             HStack(spacing: 20) {
-                tooltipStat(label: xFieldName, value: point.x)
-                tooltipStat(label: yFieldName, value: point.y)
+                tooltipStat(label: xFieldName, value: point.x, fieldType: xFieldType)
+                tooltipStat(label: yFieldName, value: point.y, fieldType: yFieldType)
                 Spacer()
             }
 
@@ -295,13 +303,13 @@ struct ScatterPlotView: View {
         .padding(.horizontal, 28)
     }
 
-    private func tooltipStat(label: String, value: Double) -> some View {
+    private func tooltipStat(label: String, value: Double, fieldType: FieldType) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label.uppercased())
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.2)
                 .foregroundColor(Theme.textSecondary)
-            Text(formatValue(value))
+            Text(formatValue(value, fieldType: fieldType))
                 .font(.system(size: 26, weight: .heavy, design: .rounded))
                 .foregroundColor(Theme.accent)
         }
@@ -352,19 +360,27 @@ struct ScatterPlotView: View {
             .symbol(.circle)
         }
         .chartYAxis {
-            AxisMarks(position: .leading) { _ in
+            AxisMarks(position: .leading) { mark in
                 AxisGridLine().foregroundStyle(Theme.hairline)
-                AxisValueLabel()
-                    .foregroundStyle(Theme.textTertiary)
-                    .font(.system(size: 10, weight: .bold))
+                AxisValueLabel {
+                    if let val = mark.as(Double.self) {
+                        Text(formatAxisValue(val, fieldType: yFieldType))
+                            .foregroundStyle(Theme.textTertiary)
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                }
             }
         }
         .chartXAxis {
-            AxisMarks { _ in
+            AxisMarks { mark in
                 AxisGridLine().foregroundStyle(Theme.hairline)
-                AxisValueLabel()
-                    .foregroundStyle(Theme.textTertiary)
-                    .font(.system(size: 10, weight: .bold))
+                AxisValueLabel {
+                    if let val = mark.as(Double.self) {
+                        Text(formatAxisValue(val, fieldType: xFieldType))
+                            .foregroundStyle(Theme.textTertiary)
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                }
             }
         }
         .chartOverlay { proxy in
@@ -436,9 +452,10 @@ struct ScatterPlotView: View {
                 Theme.background.ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: 8) {
-                        ForEach(numberFields) { field in
+                        ForEach(plottableFields) { field in
                             FieldPickerRow(
                                 name: field.name,
+                                icon: field.fieldType.systemImage,
                                 isSelected: field.name == current
                             ) {
                                 onSelect(field.name)
@@ -471,23 +488,37 @@ struct ScatterPlotView: View {
         .preferredColorScheme(.dark)
     }
 
-    private func formatValue(_ value: Double) -> String {
+    private func formatValue(_ value: Double, fieldType: FieldType = .number) -> String {
+        if fieldType == .time {
+            return TimeFormatting.secondsToDisplay(value)
+        }
         if value == value.rounded() {
             return String(format: "%.0f", value)
         }
         return String(format: "%.2f", value)
     }
+
+    private func formatAxisValue(_ value: Double, fieldType: FieldType) -> String {
+        if fieldType == .time {
+            return TimeFormatting.secondsToAxisLabel(value)
+        }
+        if value == value.rounded() {
+            return String(format: "%.0f", value)
+        }
+        return String(format: "%.1f", value)
+    }
 }
 
 private struct FieldPickerRow: View {
     let name: String
+    var icon: String = "number"
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: "number")
+                Image(systemName: icon)
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(Theme.accent)
                 Text(name)

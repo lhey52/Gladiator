@@ -9,6 +9,7 @@ import SwiftData
 enum FieldType: String, CaseIterable, Codable, Identifiable {
     case number = "Number"
     case text = "Text"
+    case time = "Time"
 
     var id: String { rawValue }
 
@@ -16,7 +17,53 @@ enum FieldType: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .number: return "number"
         case .text: return "textformat"
+        case .time: return "stopwatch"
         }
+    }
+
+    var isPlottable: Bool {
+        self == .number || self == .time
+    }
+}
+
+enum TimeFormatting {
+    static func secondsToDisplay(_ totalSeconds: Double) -> String {
+        let isNegative = totalSeconds < 0
+        let abs = Swift.abs(totalSeconds)
+        let hours = Int(abs) / 3600
+        let minutes = (Int(abs) % 3600) / 60
+        let seconds = Int(abs) % 60
+        let millis = Int((abs.truncatingRemainder(dividingBy: 1)) * 1000)
+        let prefix = isNegative ? "-" : ""
+        if hours > 0 {
+            return String(format: "%@%d:%02d:%02d.%03d", prefix, hours, minutes, seconds, millis)
+        }
+        return String(format: "%@%d:%02d.%03d", prefix, minutes, seconds, millis)
+    }
+
+    static func displayToSeconds(_ display: String) -> Double? {
+        let parts = display.split(separator: ":")
+        switch parts.count {
+        case 2:
+            guard let min = Double(parts[0]),
+                  let sec = Double(parts[1]) else { return nil }
+            return min * 60 + sec
+        case 3:
+            guard let hr = Double(parts[0]),
+                  let min = Double(parts[1]),
+                  let sec = Double(parts[2]) else { return nil }
+            return hr * 3600 + min * 60 + sec
+        default:
+            return Double(display)
+        }
+    }
+
+    static func secondsToAxisLabel(_ totalSeconds: Double) -> String {
+        let abs = Swift.abs(totalSeconds)
+        let minutes = Int(abs) / 60
+        let seconds = Int(abs) % 60
+        let prefix = totalSeconds < 0 ? "-" : ""
+        return String(format: "%@%d:%02d", prefix, minutes, seconds)
     }
 }
 

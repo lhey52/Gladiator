@@ -1,36 +1,38 @@
 //
-//  AddSessionView.swift
+//  EditSessionView.swift
 //  Gladiator
 //
 
 import SwiftUI
 import SwiftData
 
-private enum SessionFormField: Hashable {
+private enum EditSessionField: Hashable {
     case track
     case custom(String)
     case notes
 }
 
-struct AddSessionView: View {
+struct EditSessionView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
     private var customFields: [CustomField]
+
+    let session: Session
 
     @State private var date: Date = .now
     @State private var trackName: String = ""
     @State private var sessionType: SessionType = .practice
     @State private var notes: String = ""
     @State private var fieldEntries: [String: String] = [:]
-    @FocusState private var focusedField: SessionFormField?
+    @FocusState private var focusedField: EditSessionField?
 
     private var canSave: Bool {
         !trackName.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    private var allFields: [SessionFormField] {
-        var result: [SessionFormField] = [.track]
+    private var allFields: [EditSessionField] {
+        var result: [EditSessionField] = [.track]
         for field in customFields {
             result.append(.custom(field.name))
         }
@@ -45,12 +47,13 @@ struct AddSessionView: View {
                     .dismissKeyboardOnTap()
                 formScroll
             }
-            .navigationTitle("New Session")
+            .navigationTitle("Edit Session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { navToolbar }
             .keyboardToolbar(focusedField: $focusedField, fields: allFields)
         }
         .preferredColorScheme(.dark)
+        .onAppear { loadSession() }
     }
 
     private var formScroll: some View {
@@ -163,14 +166,25 @@ struct AddSessionView: View {
         )
     }
 
+    private func loadSession() {
+        date = session.date
+        trackName = session.trackName
+        sessionType = session.sessionType
+        notes = session.notes
+        for fv in session.fieldValues {
+            fieldEntries[fv.fieldName] = fv.value
+        }
+    }
+
     private func save() {
-        let session = Session(
-            date: date,
-            trackName: trackName.trimmingCharacters(in: .whitespaces),
-            sessionType: sessionType,
-            notes: notes
-        )
-        modelContext.insert(session)
+        session.date = date
+        session.trackName = trackName.trimmingCharacters(in: .whitespaces)
+        session.sessionType = sessionType
+        session.notes = notes
+
+        for fv in session.fieldValues {
+            modelContext.delete(fv)
+        }
 
         for field in customFields {
             let raw = fieldEntries[field.name, default: ""].trimmingCharacters(in: .whitespaces)
@@ -184,7 +198,7 @@ struct AddSessionView: View {
     }
 
     @ViewBuilder
-    func fieldCard<Content: View>(
+    private func fieldCard<Content: View>(
         label: String,
         alignment: HorizontalAlignment = .leading,
         @ViewBuilder content: () -> Content
@@ -213,7 +227,7 @@ struct AddSessionView: View {
 private struct CustomFieldInput: View {
     let field: CustomField
     @Binding var value: String
-    var focusedField: FocusState<SessionFormField?>.Binding
+    var focusedField: FocusState<EditSessionField?>.Binding
 
     private var timeBinding: Binding<Double> {
         Binding(
@@ -294,6 +308,13 @@ private struct TypeButton: View {
 }
 
 #Preview {
-    AddSessionView()
-        .modelContainer(for: [CustomField.self, FieldValue.self, Session.self], inMemory: true)
+    EditSessionView(
+        session: Session(
+            date: .now,
+            trackName: "Silverstone GP",
+            sessionType: .qualifying,
+            notes: "Soft compound, track temp 28°C."
+        )
+    )
+    .modelContainer(for: [CustomField.self, FieldValue.self, Session.self], inMemory: true)
 }

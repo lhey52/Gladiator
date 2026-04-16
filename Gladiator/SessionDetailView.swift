@@ -13,6 +13,7 @@ struct SessionDetailView: View {
     let session: Session
 
     @State private var showingDeleteConfirm: Bool = false
+    @State private var showingEdit: Bool = false
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -43,14 +44,24 @@ struct SessionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button(role: .destructive) {
-                    showingDeleteConfirm = true
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(Theme.accent)
+                HStack(spacing: 16) {
+                    Button { showingEdit = true } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(Theme.accent)
+                    }
+                    Button(role: .destructive) {
+                        showingDeleteConfirm = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(Theme.accent)
+                    }
                 }
             }
+        }
+        .sheet(isPresented: $showingEdit) {
+            EditSessionView(session: session)
         }
         .confirmationDialog(
             "Delete this session?",
@@ -131,7 +142,7 @@ struct SessionDetailView: View {
                 if index > 0 {
                     Divider().background(Theme.hairline)
                 }
-                detailRow(label: fv.fieldName.uppercased(), value: fv.value)
+                detailRow(label: fv.fieldName.uppercased(), value: displayValue(for: fv))
             }
         }
         .background(
@@ -181,6 +192,13 @@ struct SessionDetailView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
+    }
+
+    private func displayValue(for fv: FieldValue) -> String {
+        if fv.fieldType == .time, let secs = Double(fv.value) {
+            return TimeFormatting.secondsToDisplay(secs)
+        }
+        return fv.value
     }
 
     private func deleteSession() {

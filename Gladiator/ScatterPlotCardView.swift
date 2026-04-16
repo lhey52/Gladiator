@@ -18,27 +18,27 @@ struct ScatterPlotCardView: View {
 
     @State private var showingFullScreen: Bool = false
 
-    private var numberFields: [CustomField] {
-        allFields.filter { $0.fieldType == .number }
+    private var plottableFields: [CustomField] {
+        allFields.filter { $0.fieldType.isPlottable }
     }
 
     private var xFieldName: String {
         let name = storedXField
-        if !name.isEmpty, numberFields.contains(where: { $0.name == name }) {
+        if !name.isEmpty, plottableFields.contains(where: { $0.name == name }) {
             return name
         }
-        return numberFields.first?.name ?? ""
+        return plottableFields.first?.name ?? ""
     }
 
     private var yFieldName: String {
         let name = storedYField
-        if !name.isEmpty, numberFields.contains(where: { $0.name == name }) {
+        if !name.isEmpty, plottableFields.contains(where: { $0.name == name }) {
             return name
         }
-        if numberFields.count >= 2 {
-            return numberFields[1].name
+        if plottableFields.count >= 2 {
+            return plottableFields[1].name
         }
-        return numberFields.first?.name ?? ""
+        return plottableFields.first?.name ?? ""
     }
 
     private var points: [ScatterPoint] {
@@ -53,7 +53,7 @@ struct ScatterPlotCardView: View {
                     .tracking(2)
                     .foregroundColor(Theme.textSecondary)
                 Spacer()
-                if !numberFields.isEmpty {
+                if !plottableFields.isEmpty {
                     Image(systemName: "arrow.up.right")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(Theme.accent)
@@ -67,7 +67,7 @@ struct ScatterPlotCardView: View {
                 cardBody
             }
             .buttonStyle(.plain)
-            .disabled(numberFields.isEmpty)
+            .disabled(plottableFields.isEmpty)
         }
         .fullScreenCover(isPresented: $showingFullScreen) {
             ScatterPlotView()
@@ -77,7 +77,7 @@ struct ScatterPlotCardView: View {
     @ViewBuilder
     private var cardBody: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if numberFields.isEmpty {
+            if plottableFields.isEmpty {
                 emptyContent
             } else if points.isEmpty {
                 needMoreDataContent
