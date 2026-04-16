@@ -22,6 +22,7 @@ struct DashboardView: View {
                         TypeBreakdownSection(sessions: sessions)
                         ActivityChartSection(sessions: sessions)
                         ScatterPlotCardView()
+                        CorrelationCardView()
                         RecentSessionsSection(sessions: Array(sessions.prefix(5)))
                         Color.clear.frame(height: 8)
                     }
