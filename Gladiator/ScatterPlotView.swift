@@ -17,7 +17,7 @@ struct ScatterPlotView: View {
     @AppStorage("scatterXField") private var storedXField: String = ""
     @AppStorage("scatterYField") private var storedYField: String = ""
 
-    @State private var selectedPointID: UUID?
+    @State private var selectedPointID: String?
     @State private var showingXPicker: Bool = false
     @State private var showingYPicker: Bool = false
     @State private var navigateToSession: Session?
@@ -355,9 +355,8 @@ struct ScatterPlotView: View {
                 x: .value(xFieldName, point.x),
                 y: .value(yFieldName, point.y)
             )
-            .foregroundStyle(selectedPointID == point.id ? Theme.accent : Theme.accent.opacity(0.7))
-            .symbolSize(selectedPointID == point.id ? 120 : 60)
-            .symbol(.circle)
+            .foregroundStyle(Color.clear)
+            .symbolSize(1)
         }
         .chartYAxis {
             AxisMarks(position: .leading) { mark in
@@ -385,63 +384,35 @@ struct ScatterPlotView: View {
         }
         .chartOverlay { proxy in
             GeometryReader { geo in
+                let plotFrame = proxy.plotFrame.map { geo[$0] } ?? .zero
+
                 Rectangle()
                     .fill(Color.clear)
                     .contentShape(Rectangle())
-                    .gesture(
-                        SpatialTapGesture()
-                            .onEnded { tap in
-                                handleTap(at: tap.location, proxy: proxy, geometry: geo)
+                    .onTapGesture { selectedPointID = nil }
+
+                ForEach(points) { point in
+                    if let px = proxy.position(forX: point.x),
+                       let py = proxy.position(forY: point.y) {
+                        let isSelected = selectedPointID == point.id
+                        Circle()
+                            .fill(isSelected ? Theme.accent : Theme.accent.opacity(0.75))
+                            .frame(width: isSelected ? 16 : 12, height: isSelected ? 16 : 12)
+                            .shadow(color: Theme.accent.opacity(isSelected ? 0.7 : 0.3), radius: isSelected ? 8 : 4)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle().size(width: 44, height: 44))
+                            .position(
+                                x: plotFrame.origin.x + px,
+                                y: plotFrame.origin.y + py
+                            )
+                            .onTapGesture {
+                                selectedPointID = isSelected ? nil : point.id
                             }
-                    )
+                    }
+                }
             }
         }
         .animation(.easeOut(duration: 0.2), value: selectedPointID)
-    }
-
-    // MARK: - Tap handling
-
-    private func handleTap(at location: CGPoint, proxy: ChartProxy, geometry: GeometryProxy) {
-        guard let plotFrame = proxy.plotFrame else {
-            selectedPointID = nil
-            return
-        }
-        let plotArea = geometry[plotFrame]
-        let plotLocation = CGPoint(
-            x: location.x - plotArea.origin.x,
-            y: location.y - plotArea.origin.y
-        )
-
-        guard plotArea.contains(location),
-              let _: Double = proxy.value(atX: plotLocation.x),
-              let _: Double = proxy.value(atY: plotLocation.y) else {
-            selectedPointID = nil
-            return
-        }
-
-        let closest = points
-            .map { point -> (ScatterPoint, Double) in
-                let dist = screenDistance(point, tapLocation: location, plotArea: plotArea, proxy: proxy)
-                return (point, dist)
-            }
-            .min { $0.1 < $1.1 }
-
-        if let (point, dist) = closest, dist < 40 {
-            selectedPointID = selectedPointID == point.id ? nil : point.id
-        } else {
-            selectedPointID = nil
-        }
-    }
-
-    private func screenDistance(_ point: ScatterPoint, tapLocation: CGPoint,
-                               plotArea: CGRect, proxy: ChartProxy) -> Double {
-        guard let px = proxy.position(forX: point.x),
-              let py = proxy.position(forY: point.y) else { return .infinity }
-        let pointScreenX = plotArea.origin.x + px
-        let pointScreenY = plotArea.origin.y + py
-        let dx = pointScreenX - tapLocation.x
-        let dy = pointScreenY - tapLocation.y
-        return sqrt(dx * dx + dy * dy)
     }
 
     // MARK: - Field picker

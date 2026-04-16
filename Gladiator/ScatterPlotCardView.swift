@@ -178,7 +178,7 @@ struct ScatterPlotCardView: View {
 }
 
 struct ScatterPoint: Identifiable {
-    let id: UUID
+    let id: String
     let session: Session
     let sessionName: String
     let sessionDate: Date
@@ -189,13 +189,13 @@ struct ScatterPoint: Identifiable {
 func buildPoints(sessions: [Session], xField: String, yField: String) -> [ScatterPoint] {
     guard !xField.isEmpty, !yField.isEmpty else { return [] }
     var result: [ScatterPoint] = []
-    for session in sessions {
+    for (index, session) in sessions.enumerated() {
         let xVal = session.fieldValues.first(where: { $0.fieldName == xField })
         let yVal = session.fieldValues.first(where: { $0.fieldName == yField })
         guard let xStr = xVal?.value, let yStr = yVal?.value,
               let x = Double(xStr), let y = Double(yStr) else { continue }
         result.append(ScatterPoint(
-            id: UUID(),
+            id: "\(xField)-\(yField)-\(index)",
             session: session,
             sessionName: session.trackName.isEmpty ? "Untitled" : session.trackName,
             sessionDate: session.date,

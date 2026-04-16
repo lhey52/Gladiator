@@ -88,20 +88,29 @@ struct CustomFieldsView: View {
     }
 
     private var fieldList: some View {
-        List {
-            ForEach(fields) { field in
-                MetricRow(
-                    field: field,
-                    onEdit: { fieldToEdit = field },
-                    onDelete: { fieldToDelete = field }
-                )
-                .listRowBackground(Theme.surface)
-                .listRowSeparatorTint(Theme.hairline)
+        VStack(spacing: 0) {
+            List {
+                ForEach(fields) { field in
+                    MetricRow(
+                        field: field,
+                        onEdit: { fieldToEdit = field },
+                        onDelete: { fieldToDelete = field }
+                    )
+                    .listRowBackground(Theme.surface)
+                    .listRowSeparatorTint(Theme.hairline)
+                }
+                .onMove(perform: moveFields)
             }
-            .onMove(perform: moveFields)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+
+            Text("Hold and drag fields to reorder. Adding or removing metrics will not impact existing saved sessions.")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+                .padding(.vertical, 16)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
     }
 
     private func moveFields(from source: IndexSet, to destination: Int) {
