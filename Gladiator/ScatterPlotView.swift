@@ -22,6 +22,14 @@ struct ScatterPlotView: View {
     @State private var showingYPicker: Bool = false
     @State private var navigateToSession: Session?
 
+    @State private var zoomScale: CGFloat = 1.0
+    @State private var gestureScale: CGFloat = 1.0
+    @State private var panOffset: CGSize = .zero
+    @State private var gesturePan: CGSize = .zero
+
+    private let minZoom: CGFloat = 1.0
+    private let maxZoom: CGFloat = 8.0
+
     private var plottableFields: [CustomField] {
         allFields.filter { $0.fieldType.isPlottable }
     }
@@ -54,6 +62,60 @@ struct ScatterPlotView: View {
     private var selectedPoint: ScatterPoint? {
         guard let id = selectedPointID else { return nil }
         return points.first { $0.id == id }
+    }
+
+    private var isZoomed: Bool { zoomScale > 1.01 }
+
+    // MARK: - Data ranges
+
+    private var fullXRange: ClosedRange<Double> {
+        let vals = points.map(\.x)
+        let lo = vals.min() ?? 0
+        let hi = vals.max() ?? 1
+        let margin = max((hi - lo) * 0.12, 0.5)
+        return (lo - margin)...(hi + margin)
+    }
+
+    private var fullYRange: ClosedRange<Double> {
+        let vals = points.map(\.y)
+        let lo = vals.min() ?? 0
+        let hi = vals.max() ?? 1
+        let margin = max((hi - lo) * 0.12, 0.5)
+        return (lo - margin)...(hi + margin)
+    }
+
+    private var effectiveScale: CGFloat {
+        min(max(zoomScale * gestureScale, minZoom), maxZoom)
+    }
+
+    private var visibleXRange: ClosedRange<Double> {
+        zoomedRange(full: fullXRange, panPx: panOffset.width + gesturePan.width, scale: effectiveScale, invert: false)
+    }
+
+    private var visibleYRange: ClosedRange<Double> {
+        zoomedRange(full: fullYRange, panPx: -(panOffset.height + gesturePan.height), scale: effectiveScale, invert: false)
+    }
+
+    private func zoomedRange(full: ClosedRange<Double>, panPx: CGFloat, scale: CGFloat, invert: Bool) -> ClosedRange<Double> {
+        let fullSpan = full.upperBound - full.lowerBound
+        let visibleSpan = fullSpan / Double(scale)
+        let center = (full.lowerBound + full.upperBound) / 2
+        let panFraction = Double(panPx) / 300.0
+        let panData = panFraction * visibleSpan
+        let newCenter = center - panData
+        let lo = max(newCenter - visibleSpan / 2, full.lowerBound)
+        let hi = min(newCenter + visibleSpan / 2, full.upperBound)
+        if hi - lo < visibleSpan * 0.99 {
+            if lo == full.lowerBound { return lo...(lo + visibleSpan) }
+            return (hi - visibleSpan)...hi
+        }
+        return lo...hi
+    }
+
+    private var visiblePoints: [ScatterPoint] {
+        let xR = visibleXRange
+        let yR = visibleYRange
+        return points.filter { xR.contains($0.x) && yR.contains($0.y) }
     }
 
     var body: some View {
@@ -99,6 +161,7 @@ struct ScatterPlotView: View {
                 fieldPicker(axis: "X", current: xFieldName) { name in
                     storedXField = name
                     selectedPointID = nil
+                    resetZoom()
                 }
             }
 
@@ -111,6 +174,7 @@ struct ScatterPlotView: View {
                 fieldPicker(axis: "Y", current: yFieldName) { name in
                     storedYField = name
                     selectedPointID = nil
+                    resetZoom()
                 }
             }
         }
@@ -157,6 +221,7 @@ struct ScatterPlotView: View {
             storedXField = oldY
             storedYField = oldX
             selectedPointID = nil
+            resetZoom()
         } label: {
             Image(systemName: "arrow.left.arrow.right")
                 .font(.system(size: 14, weight: .bold))
@@ -213,6 +278,10 @@ struct ScatterPlotView: View {
                     .padding(.bottom, 12)
             }
 
+            if isZoomed {
+                resetButton
+            }
+
             if selectedPoint != nil {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
@@ -226,6 +295,41 @@ struct ScatterPlotView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: selectedPointID)
+    }
+
+    private var resetButton: some View {
+        VStack {
+            HStack {
+                Spacer()
+                Button {
+                    withAnimation(.easeOut(duration: 0.3)) { resetZoom() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("RESET")
+                            .font(.system(size: 10, weight: .heavy))
+                            .tracking(1)
+                    }
+                    .foregroundColor(Theme.accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule().fill(Theme.surface)
+                    )
+                    .overlay(
+                        Capsule().stroke(Theme.accent.opacity(0.5), lineWidth: 1)
+                    )
+                    .shadow(color: Theme.accent.opacity(0.3), radius: 6)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 28)
+            }
+            .padding(.top, 24)
+            Spacer()
+        }
+        .transition(.opacity)
+        .animation(.easeOut(duration: 0.2), value: isZoomed)
     }
 
     // MARK: - Tooltip card
@@ -358,6 +462,8 @@ struct ScatterPlotView: View {
             .foregroundStyle(Color.clear)
             .symbolSize(1)
         }
+        .chartXScale(domain: visibleXRange)
+        .chartYScale(domain: visibleYRange)
         .chartYAxis {
             AxisMarks(position: .leading) { mark in
                 AxisGridLine().foregroundStyle(Theme.hairline)
@@ -386,12 +492,11 @@ struct ScatterPlotView: View {
             GeometryReader { geo in
                 let plotFrame = proxy.plotFrame.map { geo[$0] } ?? .zero
 
-                Rectangle()
-                    .fill(Color.clear)
+                Color.clear
                     .contentShape(Rectangle())
-                    .onTapGesture { selectedPointID = nil }
+                    .gesture(zoomPanGesture(plotSize: plotFrame.size))
 
-                ForEach(points) { point in
+                ForEach(visiblePoints) { point in
                     if let px = proxy.position(forX: point.x),
                        let py = proxy.position(forY: point.y) {
                         let isSelected = selectedPointID == point.id
@@ -412,7 +517,42 @@ struct ScatterPlotView: View {
                 }
             }
         }
-        .animation(.easeOut(duration: 0.2), value: selectedPointID)
+        .animation(.easeOut(duration: 0.15), value: selectedPointID)
+    }
+
+    // MARK: - Zoom & pan
+
+    private func zoomPanGesture(plotSize: CGSize) -> some Gesture {
+        let pinch = MagnificationGesture()
+            .onChanged { value in
+                gestureScale = value
+            }
+            .onEnded { value in
+                zoomScale = min(max(zoomScale * value, minZoom), maxZoom)
+                gestureScale = 1.0
+            }
+
+        let drag = DragGesture()
+            .onChanged { value in
+                gesturePan = value.translation
+            }
+            .onEnded { value in
+                panOffset = CGSize(
+                    width: panOffset.width + value.translation.width,
+                    height: panOffset.height + value.translation.height
+                )
+                gesturePan = .zero
+            }
+
+        return pinch.simultaneously(with: drag)
+    }
+
+    private func resetZoom() {
+        zoomScale = 1.0
+        gestureScale = 1.0
+        panOffset = .zero
+        gesturePan = .zero
+        selectedPointID = nil
     }
 
     // MARK: - Field picker
