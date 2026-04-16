@@ -464,6 +464,10 @@ struct ScatterPlotView: View {
         }
         .chartXScale(domain: visibleXRange)
         .chartYScale(domain: visibleYRange)
+        .chartPlotStyle { plotArea in
+            plotArea
+                .border(Theme.textTertiary, width: 1)
+        }
         .chartYAxis {
             AxisMarks(position: .leading) { mark in
                 AxisGridLine().foregroundStyle(Theme.hairline)
