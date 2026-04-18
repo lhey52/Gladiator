@@ -52,17 +52,23 @@ struct ContentView: View {
                 }
                 .tag(0)
 
+            AnalyticsView()
+                .tabItem {
+                    Label("Analytics", systemImage: "chart.xyaxis.line")
+                }
+                .tag(1)
+
             SessionsView()
                 .tabItem {
                     Label("Sessions", systemImage: "flag.checkered")
                 }
-                .tag(1)
+                .tag(2)
 
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "slider.horizontal.3")
                 }
-                .tag(2)
+                .tag(3)
         }
         .tint(Theme.accent)
         .preferredColorScheme(.dark)
