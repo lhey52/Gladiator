@@ -28,6 +28,30 @@ struct AnalyticsView: View {
                         ) {
                             CorrelationView()
                         }
+
+                        AnalyticsCard(
+                            icon: "arrow.left.arrow.right.square",
+                            title: "Session Comparison",
+                            description: "Compare metrics across sessions or time periods"
+                        ) {
+                            SessionComparisonView()
+                        }
+
+                        AnalyticsCard(
+                            icon: "chart.line.uptrend.xyaxis",
+                            title: "Trend Analysis",
+                            description: "Track how metrics change over time"
+                        ) {
+                            TrendAnalysisView()
+                        }
+
+                        AnalyticsCard(
+                            icon: "trophy.fill",
+                            title: "Personal Bests",
+                            description: "All-time best values across every metric"
+                        ) {
+                            PersonalBestsView()
+                        }
                     }
                     .padding(20)
                     .padding(.top, 4)

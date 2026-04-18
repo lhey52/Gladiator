@@ -1,0 +1,135 @@
+//
+//  GlossaryData.swift
+//  Gladiator
+//
+
+import Foundation
+
+struct GlossaryTerm: Identifiable {
+    let id: String
+    let name: String
+    let definition: String
+    let children: [GlossaryChild]
+    let seeAlso: [String]
+}
+
+struct GlossaryChild: Identifiable {
+    let id: String
+    let name: String
+    let definition: String
+}
+
+enum GlossaryData {
+    static let allTerms: [GlossaryTerm] = [
+        GlossaryTerm(
+            id: "correlation",
+            name: "Correlation",
+            definition: "A statistical measure that describes the strength and direction of a relationship between two metrics. Correlation values range from -1.0 (perfect inverse relationship) to +1.0 (perfect direct relationship), with 0 indicating no relationship.",
+            children: [
+                GlossaryChild(
+                    id: "pearson",
+                    name: "Pearson Correlation Coefficient (r)",
+                    definition: "The specific formula used to calculate correlation in Gladiator. It measures the linear relationship between two sets of values. An r value close to +1 or -1 indicates a strong linear relationship, while a value near 0 suggests little to no linear relationship."
+                ),
+                GlossaryChild(
+                    id: "confidence",
+                    name: "Confidence Level",
+                    definition: "An indicator of how reliable a correlation result is based on sample size. Low Confidence (5–10 sessions) means the result may shift significantly as more data is collected. Moderate Confidence (11–30 sessions) is more stable. High Confidence (31+ sessions) provides the most reliable results."
+                )
+            ],
+            seeAlso: ["Scatter Plot", "Trend Analysis"]
+        ),
+        GlossaryTerm(
+            id: "trend-analysis",
+            name: "Trend Analysis",
+            definition: "A tool for tracking how a metric changes over time. It plots individual session values chronologically and overlays a smoothed line to reveal the overall direction of change, filtering out noise from session-to-session variation.",
+            children: [
+                GlossaryChild(
+                    id: "moving-average",
+                    name: "Moving Average",
+                    definition: "A calculation that smooths out short-term fluctuations by averaging a fixed number of recent sessions (the window size). A 5-session moving average, for example, shows the average of the most recent 5 values at each point, making it easier to see the underlying trend."
+                ),
+                GlossaryChild(
+                    id: "trend-direction",
+                    name: "Trend Direction",
+                    definition: "An indicator showing whether a metric is Improving, Declining, or Stable based on the slope of the moving average. For time-based metrics like lap time, a decrease is considered an improvement. For number-based metrics, an increase is considered an improvement by default."
+                )
+            ],
+            seeAlso: ["Correlation", "Personal Best"]
+        ),
+        GlossaryTerm(
+            id: "session-comparison",
+            name: "Session Comparison",
+            definition: "A tool for comparing metric values side by side between two sessions or two time periods. It highlights which side performed better for each metric, giving a clear picture of progress or regression.",
+            children: [
+                GlossaryChild(
+                    id: "session-average",
+                    name: "Session Average",
+                    definition: "When comparing time periods (year vs year, month vs month, or custom ranges), each metric is shown as the arithmetic mean of all recorded values within that period. This provides a representative single value for comparison rather than showing every individual session."
+                )
+            ],
+            seeAlso: ["Session Type", "Custom Metric"]
+        ),
+        GlossaryTerm(
+            id: "personal-best",
+            name: "Personal Best",
+            definition: "The all-time best recorded value for a given metric across all sessions. For time-based metrics, the best is the lowest value (fastest time). For number-based metrics, the best is the highest value. Each personal best shows which session and date it was achieved.",
+            children: [],
+            seeAlso: ["Trend Analysis", "Custom Metric"]
+        ),
+        GlossaryTerm(
+            id: "session-type",
+            name: "Session Type",
+            definition: "A classification applied to each recorded session: Practice, Qualifying, or Race. Session types help organize and filter your data, and can be used to compare performance across different types of on-track activity.",
+            children: [],
+            seeAlso: ["Session Comparison"]
+        ),
+        GlossaryTerm(
+            id: "custom-metric",
+            name: "Custom Metric",
+            definition: "A user-defined data field for tracking specific performance or setup values. Each metric has a type — Number (e.g. tire pressure, fuel load), Text (e.g. tire compound), or Time (e.g. lap time, sector time). Metrics can be added, edited, reordered, and removed in Settings without affecting existing saved sessions.",
+            children: [],
+            seeAlso: ["Personal Best", "Scatter Plot"]
+        ),
+        GlossaryTerm(
+            id: "scatter-plot",
+            name: "Scatter Plot",
+            definition: "A graph that plots two metrics against each other, with one on the X axis and one on the Y axis. Each data point represents a session. Scatter plots are useful for visually identifying relationships or clusters in your data — for example, whether higher tire pressure tends to correlate with faster lap times.",
+            children: [],
+            seeAlso: ["Correlation", "Custom Metric"]
+        ),
+        GlossaryTerm(
+            id: "standard-deviation",
+            name: "Standard Deviation",
+            definition: "A measure of how spread out your values are from the average. A low standard deviation means your results are consistent and clustered near the mean. A high standard deviation means there is more variation between sessions. It is commonly used to evaluate consistency in performance.",
+            children: [],
+            seeAlso: ["Correlation", "Trend Analysis"]
+        )
+    ]
+
+    static func find(byName name: String) -> GlossaryTerm? {
+        allTerms.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+    }
+
+    static func search(query: String) -> [GlossaryTerm] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return allTerms }
+        return allTerms.filter { term in
+            term.name.lowercased().contains(q)
+            || term.definition.lowercased().contains(q)
+            || term.children.contains { child in
+                child.name.lowercased().contains(q)
+                || child.definition.lowercased().contains(q)
+            }
+        }
+    }
+
+    static func matchingChildIDs(in term: GlossaryTerm, query: String) -> Set<String> {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return [] }
+        return Set(term.children.filter { child in
+            child.name.lowercased().contains(q)
+            || child.definition.lowercased().contains(q)
+        }.map(\.id))
+    }
+}
