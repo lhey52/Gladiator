@@ -6,7 +6,8 @@
 import SwiftUI
 
 struct ResetView: View {
-    @AppStorage("sessionFormTipDismissed") private var tipDismissed: Bool = false
+    @AppStorage("sessionFormTipDismissed") private var sessionFormTipDismissed: Bool = false
+    @AppStorage("dashboardTipDismissed") private var dashboardTipDismissed: Bool = false
     @State private var showingConfirm: Bool = false
 
     var body: some View {
@@ -33,7 +34,8 @@ struct ResetView: View {
         .alert("Reset Tooltips", isPresented: $showingConfirm) {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
-                tipDismissed = false
+                sessionFormTipDismissed = false
+                dashboardTipDismissed = false
             }
         } message: {
             Text("This will restore all dismissed tips. Continue?")

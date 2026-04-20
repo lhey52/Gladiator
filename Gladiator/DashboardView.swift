@@ -11,12 +11,17 @@ struct DashboardView: View {
     @Query(sort: [SortDescriptor(\Session.date, order: .reverse)])
     private var sessions: [Session]
 
+    @AppStorage("dashboardTipDismissed") private var tipDismissed: Bool = false
+
     var body: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: 20) {
+                        if sessions.isEmpty, !tipDismissed {
+                            dashboardTip
+                        }
                         header
                         SummarySection(sessions: sessions)
                         TypeBreakdownSection(sessions: sessions)
@@ -30,6 +35,35 @@ struct DashboardView: View {
             }
             .navigationBarHidden(true)
         }
+    }
+
+    private var dashboardTip: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Theme.accent)
+            Text("Add new sessions to begin tracking and analyzing data.")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+            Spacer()
+            Button { tipDismissed = true } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Theme.textTertiary)
+                    .frame(width: 24, height: 24)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
+        )
+        .shadow(color: Theme.accent.opacity(0.12), radius: 10, y: 4)
     }
 
     private var header: some View {

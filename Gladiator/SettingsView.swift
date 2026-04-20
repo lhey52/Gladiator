@@ -28,6 +28,15 @@ struct SettingsView: View {
                 .listRowBackground(Theme.surface)
                 .listRowSeparatorTint(Theme.hairline)
 
+                NavigationLink(destination: ExportShareView()) {
+                    Text("Export & Share")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundColor(Theme.textPrimary)
+                        .padding(.vertical, 4)
+                }
+                .listRowBackground(Theme.surface)
+                .listRowSeparatorTint(Theme.hairline)
+
                 NavigationLink(destination: ResetView()) {
                     Text("Reset")
                         .font(.system(size: 15, weight: .heavy))
