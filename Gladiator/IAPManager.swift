@@ -17,14 +17,23 @@ final class IAPManager: ObservableObject {
 
     // MARK: - Published state
 
-    @Published var isProUser: Bool = false
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
     @Published var products: [Product] = []
+    @Published var codeGrantedPro: Bool {
+        didSet { UserDefaults.standard.set(codeGrantedPro, forKey: "codeGrantedPro") }
+    }
+
+    private var subscriptionActive: Bool = false
+
+    var isProUser: Bool {
+        subscriptionActive || codeGrantedPro
+    }
 
     private var updateTask: Task<Void, Never>?
 
     private init() {
+        codeGrantedPro = UserDefaults.standard.bool(forKey: "codeGrantedPro")
         updateTask = Task { await listenForTransactions() }
         Task { await checkSubscriptionStatus() }
         Task { await loadProducts() }
@@ -97,7 +106,8 @@ final class IAPManager: ObservableObject {
                 }
             }
         }
-        isProUser = hasActive
+        subscriptionActive = hasActive
+        objectWillChange.send()
     }
 
     // MARK: - Limits
