@@ -30,7 +30,6 @@ struct SessionDetailView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     headerCard
-                    metaCard
                     if !sortedFieldValues.isEmpty {
                         customFieldsCard
                     }
@@ -108,6 +107,15 @@ struct SessionDetailView: View {
             Text(session.trackName.isEmpty ? "Untitled Track" : session.trackName)
                 .font(.system(size: 32, weight: .heavy))
                 .foregroundColor(Theme.textPrimary)
+            if !session.vehicleName.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "car.fill")
+                        .font(.system(size: 11, weight: .bold))
+                    Text(session.vehicleName)
+                        .font(.system(size: 14, weight: .heavy))
+                }
+                .foregroundColor(Theme.textSecondary)
+            }
             Text(Self.dateFormatter.string(from: session.date))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Theme.textSecondary)

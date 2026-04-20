@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum TrackCodeAction {
+enum TrackCodeAction: Equatable {
     case grantPro
     case seedDemoData
 }

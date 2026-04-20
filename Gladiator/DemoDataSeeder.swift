@@ -24,17 +24,18 @@ enum DemoDataSeeder {
 
     private struct DemoSession {
         let trackName: String
+        let vehicleName: String
         let daysAgo: Int
         let values: [String: String]
     }
 
     private static let demoSessions: [DemoSession] = [
-        DemoSession(trackName: "Track1", daysAgo: 5, values: ["Metric1": "10", "Metric2": "40"]),
-        DemoSession(trackName: "Track1", daysAgo: 4, values: ["Metric1": "15", "Metric2": "45"]),
-        DemoSession(trackName: "Track1", daysAgo: 3, values: ["Metric1": "20", "Metric2": "50"]),
-        DemoSession(trackName: "Track1", daysAgo: 2, values: ["Metric1": "25", "Metric2": "55"]),
-        DemoSession(trackName: "Track1", daysAgo: 1, values: ["Metric1": "30", "Metric2": "55"]),
-        DemoSession(trackName: "Track2", daysAgo: 35, values: [:])
+        DemoSession(trackName: "Track1", vehicleName: "Vehicle1", daysAgo: 5, values: ["Metric1": "10", "Metric2": "40"]),
+        DemoSession(trackName: "Track1", vehicleName: "Vehicle1", daysAgo: 4, values: ["Metric1": "15", "Metric2": "45"]),
+        DemoSession(trackName: "Track1", vehicleName: "Vehicle1", daysAgo: 3, values: ["Metric1": "20", "Metric2": "50"]),
+        DemoSession(trackName: "Track1", vehicleName: "Vehicle1", daysAgo: 2, values: ["Metric1": "25", "Metric2": "55"]),
+        DemoSession(trackName: "Track1", vehicleName: "Vehicle1", daysAgo: 1, values: ["Metric1": "30", "Metric2": "55"]),
+        DemoSession(trackName: "Track2", vehicleName: "Vehicle1", daysAgo: 35, values: [:])
     ]
 
     // MARK: - Seed
@@ -80,7 +81,7 @@ enum DemoDataSeeder {
             let session = Session(
                 date: date,
                 trackName: demo.trackName,
-                vehicleName: "Vehicle1",
+                vehicleName: demo.vehicleName,
                 sessionType: .practice,
                 notes: ""
             )

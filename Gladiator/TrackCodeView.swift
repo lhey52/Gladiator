@@ -166,7 +166,9 @@ struct TrackCodeView: View {
         switch result {
         case .success(let action):
             let normalized = inputCode.trimmingCharacters(in: .whitespaces).uppercased()
-            activeCode = normalized
+            if action == .grantPro {
+                activeCode = normalized
+            }
             inputCode = ""
             statusMessage = "Code activated successfully"
             statusIsError = false

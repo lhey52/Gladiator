@@ -34,7 +34,7 @@ enum SessionType: String, CaseIterable, Codable, Identifiable {
 final class Session {
     var date: Date
     var trackName: String
-    var vehicleName: String
+    var vehicleName: String = ""
     var sessionTypeRaw: String
     var notes: String
     var createdAt: Date
