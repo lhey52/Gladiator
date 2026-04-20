@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selection: Int = 0
+    @State private var sessionsTypeFilter: SessionType?
 
     init() {
         let appearance = UITabBarAppearance()
@@ -46,7 +47,10 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selection) {
-            DashboardView()
+            DashboardView(onSelectType: { type in
+                    sessionsTypeFilter = type
+                    selection = 2
+                })
                 .tabItem {
                     Label("Dashboard", systemImage: "gauge.open.with.lines.needle.33percent")
                 }
@@ -58,7 +62,7 @@ struct ContentView: View {
                 }
                 .tag(1)
 
-            SessionsView()
+            SessionsView(externalTypeFilter: $sessionsTypeFilter)
                 .tabItem {
                     Label("Sessions", systemImage: "flag.checkered")
                 }

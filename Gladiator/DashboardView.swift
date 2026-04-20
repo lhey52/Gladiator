@@ -8,6 +8,8 @@ import SwiftData
 import Charts
 
 struct DashboardView: View {
+    var onSelectType: ((SessionType) -> Void)?
+
     @Query(sort: [SortDescriptor(\Session.date, order: .reverse)])
     private var sessions: [Session]
 
@@ -29,7 +31,7 @@ struct DashboardView: View {
                         }
                         header
                         SummarySection(sessions: sessions)
-                        TypeBreakdownSection(sessions: sessions)
+                        TypeBreakdownSection(sessions: sessions, onSelectType: onSelectType)
                         ActivityChartSection(sessions: sessions)
                         RecentSessionsSection(sessions: Array(sessions.prefix(5)))
                         Color.clear.frame(height: 8)
@@ -190,6 +192,7 @@ private struct SummarySection: View {
 
 private struct TypeBreakdownSection: View {
     let sessions: [Session]
+    var onSelectType: ((SessionType) -> Void)?
 
     private func count(_ type: SessionType) -> Int {
         sessions.filter { $0.sessionType == type }.count
@@ -205,7 +208,12 @@ private struct TypeBreakdownSection: View {
 
             HStack(spacing: 12) {
                 ForEach(SessionType.allCases) { type in
-                    TypeTile(type: type, count: count(type))
+                    Button {
+                        onSelectType?(type)
+                    } label: {
+                        TypeTile(type: type, count: count(type))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -253,6 +261,8 @@ private struct TypeTile: View {
 private struct ActivityChartSection: View {
     let sessions: [Session]
 
+    @State private var showingDetail: Bool = false
+
     private struct DayBucket: Identifiable {
         let id: Date
         let date: Date
@@ -277,14 +287,24 @@ private struct ActivityChartSection: View {
                     .tracking(2)
                     .foregroundColor(Theme.textSecondary)
                 Spacer()
-                Text("\(sessions.count) SESSIONS")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(1.5)
-                    .foregroundColor(Theme.accent)
+                HStack(spacing: 4) {
+                    Text("\(sessions.count) SESSIONS")
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(1.5)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                }
+                .foregroundColor(Theme.accent)
             }
             .padding(.horizontal, 4)
 
-            chartCard
+            Button { showingDetail = true } label: {
+                chartCard
+            }
+            .buttonStyle(.plain)
+        }
+        .fullScreenCover(isPresented: $showingDetail) {
+            ActivityChartView()
         }
     }
 

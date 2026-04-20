@@ -115,13 +115,24 @@ struct AnalyticsView: View {
             }
 
             ZStack {
-                Text(currentMessage)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Theme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 10) {
+                    Text(currentMessage)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .id(insightIndex)
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9, weight: .bold))
+                        Text("Always verify insights manually.")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundColor(Theme.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .id(insightIndex)
-                    .blur(radius: iap.isProUser ? 0 : 6)
+                }
+                .blur(radius: iap.isProUser ? 0 : 6)
 
                 if !iap.isProUser {
                     HStack(spacing: 8) {

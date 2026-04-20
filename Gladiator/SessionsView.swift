@@ -7,6 +7,8 @@ import SwiftUI
 import SwiftData
 
 struct SessionsView: View {
+    @Binding var externalTypeFilter: SessionType?
+
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\Session.date, order: .reverse)])
     private var sessions: [Session]
@@ -122,6 +124,12 @@ struct SessionsView: View {
             }
             .onChange(of: showingAdd) {
                 if showingAdd { sessionCountBeforeSheet = sessions.count }
+            }
+            .onChange(of: externalTypeFilter) {
+                if let filter = externalTypeFilter {
+                    typeFilter = filter
+                    externalTypeFilter = nil
+                }
             }
             .onChange(of: sessions.count) { oldCount, newCount in
                 if newCount < oldCount, !isEditing {
@@ -415,7 +423,7 @@ private struct SessionRow: View {
 }
 
 #Preview {
-    SessionsView()
+    SessionsView(externalTypeFilter: .constant(nil))
         .modelContainer(for: Session.self, inMemory: true)
         .preferredColorScheme(.dark)
 }
