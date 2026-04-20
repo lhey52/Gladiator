@@ -24,6 +24,7 @@ struct ScatterPlotCardView: View {
 
     private var xFieldName: String {
         let name = storedXField
+        if name == scatterDateFieldName { return name }
         if !name.isEmpty, plottableFields.contains(where: { $0.name == name }) {
             return name
         }
@@ -32,6 +33,7 @@ struct ScatterPlotCardView: View {
 
     private var yFieldName: String {
         let name = storedYField
+        if name == scatterDateFieldName { return name }
         if !name.isEmpty, plottableFields.contains(where: { $0.name == name }) {
             return name
         }
@@ -186,14 +188,15 @@ struct ScatterPoint: Identifiable {
     let y: Double
 }
 
+let scatterDateFieldName = "Session Date"
+
 func buildPoints(sessions: [Session], xField: String, yField: String) -> [ScatterPoint] {
     guard !xField.isEmpty, !yField.isEmpty else { return [] }
     var result: [ScatterPoint] = []
     for (index, session) in sessions.enumerated() {
-        let xVal = session.fieldValues.first(where: { $0.fieldName == xField })
-        let yVal = session.fieldValues.first(where: { $0.fieldName == yField })
-        guard let xStr = xVal?.value, let yStr = yVal?.value,
-              let x = Double(xStr), let y = Double(yStr) else { continue }
+        let x = resolveValue(session: session, field: xField)
+        let y = resolveValue(session: session, field: yField)
+        guard let x, let y else { continue }
         result.append(ScatterPoint(
             id: "\(xField)-\(yField)-\(index)",
             session: session,
@@ -204,6 +207,14 @@ func buildPoints(sessions: [Session], xField: String, yField: String) -> [Scatte
         ))
     }
     return result
+}
+
+private func resolveValue(session: Session, field: String) -> Double? {
+    if field == scatterDateFieldName {
+        return session.date.timeIntervalSince1970
+    }
+    guard let fv = session.fieldValues.first(where: { $0.fieldName == field }) else { return nil }
+    return Double(fv.value)
 }
 
 #Preview {

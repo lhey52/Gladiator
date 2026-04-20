@@ -4,15 +4,12 @@
 //
 
 import SwiftUI
-import MessageUI
 
 struct SupportView: View {
-    @State private var showingMailCompose: Bool = false
-    @State private var showingMailError: Bool = false
-
     private let supportEmail = "SUPPORT_EMAIL_PLACEHOLDER"
     private let privacyPolicyURL = URL(string: "PRIVACY_POLICY_URL_PLACEHOLDER")!
     private let termsOfUseURL = URL(string: "TERMS_OF_USE_URL_PLACEHOLDER")!
+    private let reviewURL = URL(string: "https://apps.apple.com/app/idYOUR_APP_ID")!
 
     var body: some View {
         ZStack {
@@ -21,8 +18,10 @@ struct SupportView: View {
             ScrollView {
                 VStack(spacing: 12) {
                     contactRow
+                    featureRow
                     privacyRow
                     termsRow
+                    reviewRow
                 }
                 .padding(20)
                 .padding(.top, 4)
@@ -30,34 +29,29 @@ struct SupportView: View {
         }
         .navigationTitle("Support")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showingMailCompose) {
-            MailComposeView(recipient: supportEmail)
-        }
-        .alert("Mail Not Available", isPresented: $showingMailError) {
-            Button("Copy Email") {
-                UIPasteboard.general.string = supportEmail
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("No mail account is set up on this device. You can copy the support email address instead.")
-        }
     }
 
     private var contactRow: some View {
         Button {
-            if MFMailComposeViewController.canSendMail() {
-                showingMailCompose = true
-            } else if let mailto = URL(string: "mailto:\(supportEmail)"),
-                      UIApplication.shared.canOpenURL(mailto) {
-                UIApplication.shared.open(mailto)
-            } else {
-                showingMailError = true
-            }
+            openMailto(subject: "Gladiator Support")
         } label: {
             settingsRow(
                 icon: "envelope.fill",
                 title: "CONTACT SUPPORT",
-                subtitle: supportEmail
+                subtitle: nil
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var featureRow: some View {
+        Button {
+            openMailto(subject: "Gladiator App - Request a Feature")
+        } label: {
+            settingsRow(
+                icon: "wand.and.stars",
+                title: "REQUEST A FEATURE",
+                subtitle: nil
             )
         }
         .buttonStyle(.plain)
@@ -87,6 +81,25 @@ struct SupportView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private var reviewRow: some View {
+        Button {
+            UIApplication.shared.open(reviewURL)
+        } label: {
+            settingsRow(
+                icon: "star.fill",
+                title: "LEAVE A REVIEW",
+                subtitle: nil
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func openMailto(subject: String) {
+        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
+        guard let url = URL(string: "mailto:\(supportEmail)?subject=\(encodedSubject)") else { return }
+        UIApplication.shared.open(url)
     }
 
     private func settingsRow(icon: String, title: String, subtitle: String?) -> some View {
@@ -129,39 +142,6 @@ struct SupportView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Theme.hairline, lineWidth: 1)
         )
-    }
-}
-
-struct MailComposeView: UIViewControllerRepresentable {
-    let recipient: String
-    @Environment(\.dismiss) private var dismiss
-
-    func makeUIViewController(context: Context) -> MFMailComposeViewController {
-        let vc = MFMailComposeViewController()
-        vc.setToRecipients([recipient])
-        vc.setSubject("Gladiator Support")
-        vc.mailComposeDelegate = context.coordinator
-        return vc
-    }
-
-    func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(dismiss: dismiss)
-    }
-
-    class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
-        let dismiss: DismissAction
-
-        init(dismiss: DismissAction) {
-            self.dismiss = dismiss
-        }
-
-        func mailComposeController(_ controller: MFMailComposeViewController,
-                                   didFinishWith result: MFMailComposeResult,
-                                   error: Error?) {
-            dismiss()
-        }
     }
 }
 

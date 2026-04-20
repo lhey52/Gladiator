@@ -19,6 +19,13 @@ enum AIInsightsEngine {
     private static let priorityStaleTracks = 2
     private static let priorityPersonalBestLow = 3
     private static let priorityPersonalBestHigh = 4
+    private static let priorityVeryStrongCorrelation = 5
+    private static let priorityStrongCorrelation = 6
+    private static let priorityVeryStrongNegCorrelation = 7
+    private static let priorityStrongNegCorrelation = 8
+    private static let priorityTrendImproving = 9
+    private static let priorityTrendDeclining = 10
+    private static let priorityTrendPlateau = 11
 
     // MARK: - Thresholds (edit here)
 
@@ -42,6 +49,8 @@ enum AIInsightsEngine {
         }
         insights.append(contentsOf: personalBestLowInsights(sessions: sessions, fields: fields))
         insights.append(contentsOf: personalBestHighInsights(sessions: sessions, fields: fields))
+        insights.append(contentsOf: correlationInsights(sessions: sessions, fields: fields))
+        insights.append(contentsOf: trendInsights(sessions: sessions, fields: fields))
 
         insights.sort { $0.priority < $1.priority }
         return Array(insights.prefix(5))
@@ -59,7 +68,7 @@ enum AIInsightsEngine {
         let names = lowTracks.map(\.name).joined(separator: ", ")
         return AIInsight(
             priority: priorityLowSessionTracks,
-            message: "The following tracks have less than \(minSessionsPerTrack) sessions: \(names). Add more sessions to unlock most analytics tools for these tracks."
+            message: "The following tracks have less than \(minSessionsPerTrack) sessions: \(names). Add more sessions to generate additional AI insights and unlock most analytics tools for these tracks."
         )
     }
 
@@ -81,80 +90,161 @@ enum AIInsightsEngine {
         )
     }
 
-    // MARK: - Insight: New personal best (lowest, track-specific)
+    // MARK: - Insight: New personal best (lowest, per-track)
 
     private static func personalBestLowInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
-        guard let latest = sessions.max(by: { $0.createdAt < $1.createdAt }),
-              !latest.trackName.isEmpty else { return [] }
-        let trackName = latest.trackName
-        let others = sessions.filter { $0.persistentModelID != latest.persistentModelID && $0.trackName == trackName }
-        guard !others.isEmpty else { return [] }
-
         let plottable = fields.filter { $0.fieldType.isPlottable }
+        guard !plottable.isEmpty else { return [] }
+
+        let byTrack = Dictionary(grouping: sessions) { $0.trackName }
         var results: [AIInsight] = []
 
-        for field in plottable {
-            guard let latestFV = latest.fieldValues.first(where: { $0.fieldName == field.name }),
-                  let latestVal = Double(latestFV.value) else { continue }
+        for (trackName, trackSessions) in byTrack {
+            guard !trackName.isEmpty, trackSessions.count >= 2 else { continue }
+            guard let latest = trackSessions.max(by: { $0.createdAt < $1.createdAt }) else { continue }
+            let others = trackSessions.filter { $0.persistentModelID != latest.persistentModelID }
+            guard !others.isEmpty else { continue }
 
-            let previousValues = others.compactMap { session -> Double? in
-                guard let fv = session.fieldValues.first(where: { $0.fieldName == field.name }) else { return nil }
-                return Double(fv.value)
+            for field in plottable {
+                guard let latestFV = latest.fieldValues.first(where: { $0.fieldName == field.name }),
+                      let latestVal = Double(latestFV.value) else { continue }
+
+                let previousValues = others.compactMap { session -> Double? in
+                    guard let fv = session.fieldValues.first(where: { $0.fieldName == field.name }) else { return nil }
+                    return Double(fv.value)
+                }
+                guard !previousValues.isEmpty else { continue }
+                guard let previousMin = previousValues.min(), latestVal < previousMin else { continue }
+
+                let display = field.fieldType == .time
+                    ? TimeFormatting.secondsToDisplay(latestVal)
+                    : formatNumber(latestVal)
+
+                results.append(AIInsight(
+                    priority: priorityPersonalBestLow,
+                    message: "Your most recent session at \(trackName) recorded your lowest ever \(field.name) at this track: \(display)."
+                ))
             }
-            guard !previousValues.isEmpty else { continue }
-            guard let previousMin = previousValues.min(), latestVal < previousMin else { continue }
-
-            let display = field.fieldType == .time
-                ? TimeFormatting.secondsToDisplay(latestVal)
-                : formatNumber(latestVal)
-
-            results.append(AIInsight(
-                priority: priorityPersonalBestLow,
-                message: "Your most recent session at \(trackName) recorded your lowest ever \(field.name) at this track: \(display)."
-            ))
         }
         return results
     }
 
-    // MARK: - Insight: New personal best (highest, track-specific)
+    // MARK: - Insight: New personal best (highest, per-track)
 
     private static func personalBestHighInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
-        guard let latest = sessions.max(by: { $0.createdAt < $1.createdAt }),
-              !latest.trackName.isEmpty else { return [] }
-        let trackName = latest.trackName
-        let others = sessions.filter { $0.persistentModelID != latest.persistentModelID && $0.trackName == trackName }
-        guard !others.isEmpty else { return [] }
-
         let plottable = fields.filter { $0.fieldType.isPlottable }
+        guard !plottable.isEmpty else { return [] }
+
+        let byTrack = Dictionary(grouping: sessions) { $0.trackName }
         var results: [AIInsight] = []
 
-        for field in plottable {
-            guard let latestFV = latest.fieldValues.first(where: { $0.fieldName == field.name }),
-                  let latestVal = Double(latestFV.value) else { continue }
+        for (trackName, trackSessions) in byTrack {
+            guard !trackName.isEmpty, trackSessions.count >= 2 else { continue }
+            guard let latest = trackSessions.max(by: { $0.createdAt < $1.createdAt }) else { continue }
+            let others = trackSessions.filter { $0.persistentModelID != latest.persistentModelID }
+            guard !others.isEmpty else { continue }
 
-            let previousValues = others.compactMap { session -> Double? in
-                guard let fv = session.fieldValues.first(where: { $0.fieldName == field.name }) else { return nil }
-                return Double(fv.value)
+            for field in plottable {
+                guard let latestFV = latest.fieldValues.first(where: { $0.fieldName == field.name }),
+                      let latestVal = Double(latestFV.value) else { continue }
+
+                let previousValues = others.compactMap { session -> Double? in
+                    guard let fv = session.fieldValues.first(where: { $0.fieldName == field.name }) else { return nil }
+                    return Double(fv.value)
+                }
+                guard !previousValues.isEmpty else { continue }
+                guard let previousMax = previousValues.max(), latestVal > previousMax else { continue }
+
+                let display = field.fieldType == .time
+                    ? TimeFormatting.secondsToDisplay(latestVal)
+                    : formatNumber(latestVal)
+
+                let message: String
+                if field.fieldType == .time {
+                    message = "Your most recent session at \(trackName) recorded your highest ever \(field.name) at this track: \(display). This may be worth reviewing."
+                } else {
+                    message = "Your most recent session at \(trackName) recorded your highest ever \(field.name) at this track: \(display)."
+                }
+
+                results.append(AIInsight(
+                    priority: priorityPersonalBestHigh,
+                    message: message
+                ))
             }
-            guard !previousValues.isEmpty else { continue }
-            guard let previousMax = previousValues.max(), latestVal > previousMax else { continue }
+        }
+        return results
+    }
 
-            let display = field.fieldType == .time
-                ? TimeFormatting.secondsToDisplay(latestVal)
-                : formatNumber(latestVal)
+    // MARK: - Insight: Background correlation scan
 
-            let message: String
-            if field.fieldType == .time {
-                message = "Your most recent session at \(trackName) recorded your highest ever \(field.name) at this track: \(display). This may be worth reviewing."
-            } else {
-                message = "Your most recent session at \(trackName) recorded your highest ever \(field.name) at this track: \(display)."
+    private static func correlationInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
+        let pairs = BackgroundCorrelationScanner.scanAll(sessions: sessions, fields: fields)
+        let sorted = pairs.sorted { abs($0.r) > abs($1.r) }
+
+        var results: [AIInsight] = []
+        for pair in sorted {
+            let n = pair.sampleSize
+            let a = pair.fieldA
+            let b = pair.fieldB
+            let t = pair.trackName
+
+            if pair.r >= 0.7 {
+                results.append(AIInsight(
+                    priority: priorityVeryStrongCorrelation,
+                    message: "Very strong correlation detected at \(t): higher values of \(a) are very strongly correlated with higher values of \(b) across \(n) sessions."
+                ))
+            } else if pair.r >= 0.5 {
+                results.append(AIInsight(
+                    priority: priorityStrongCorrelation,
+                    message: "Strong correlation detected at \(t): higher values of \(a) are strongly correlated with higher values of \(b) across \(n) sessions."
+                ))
+            } else if pair.r <= -0.7 {
+                results.append(AIInsight(
+                    priority: priorityVeryStrongNegCorrelation,
+                    message: "Very strong correlation detected at \(t): higher values of \(a) are very strongly correlated with lower values of \(b) across \(n) sessions."
+                ))
+            } else if pair.r <= -0.5 {
+                results.append(AIInsight(
+                    priority: priorityStrongNegCorrelation,
+                    message: "Strong correlation detected at \(t): higher values of \(a) are strongly correlated with lower values of \(b) across \(n) sessions."
+                ))
             }
+        }
+        return results
+    }
 
+    // MARK: - Insight: Background trend scan
+
+    private static func trendInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
+        let trends = BackgroundTrendScanner.scanAll(sessions: sessions, fields: fields)
+
+        let declining = trends.filter { $0.classification == .declining }
+        let improving = trends.filter { $0.classification == .improving }
+        let plateaus = trends.filter { $0.classification == .plateau }
+
+        var results: [AIInsight] = []
+
+        for trend in declining {
             results.append(AIInsight(
-                priority: priorityPersonalBestHigh,
-                message: message
+                priority: priorityTrendDeclining,
+                message: "Declining trend detected at \(trend.trackName): your \(trend.fieldName) has been trending in a negative direction over your last \(trend.sessionCount) sessions. Consider reviewing your setup."
             ))
         }
+
+        for trend in improving {
+            results.append(AIInsight(
+                priority: priorityTrendImproving,
+                message: "Improving trend detected at \(trend.trackName): your \(trend.fieldName) has been trending in a positive direction over your last \(trend.sessionCount) sessions."
+            ))
+        }
+
+        for trend in plateaus {
+            results.append(AIInsight(
+                priority: priorityTrendPlateau,
+                message: "Plateau detected at \(trend.trackName): your \(trend.fieldName) has remained stable over your last \(trend.sessionCount) sessions. You may have reached your current setup ceiling."
+            ))
+        }
+
         return results
     }
 

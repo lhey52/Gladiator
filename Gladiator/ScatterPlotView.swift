@@ -36,26 +36,41 @@ struct ScatterPlotView: View {
         allFields.filter { $0.fieldType.isPlottable }
     }
 
+    private var scatterFieldOptions: [(name: String, icon: String)] {
+        var options: [(String, String)] = [(scatterDateFieldName, "calendar")]
+        for f in plottableFields {
+            options.append((f.name, f.fieldType.systemImage))
+        }
+        return options
+    }
+
     private var xFieldName: String {
         let name = storedXField
+        if name == scatterDateFieldName { return name }
         if !name.isEmpty, plottableFields.contains(where: { $0.name == name }) { return name }
         return plottableFields.first?.name ?? ""
     }
 
     private var yFieldName: String {
         let name = storedYField
+        if name == scatterDateFieldName { return name }
         if !name.isEmpty, plottableFields.contains(where: { $0.name == name }) { return name }
         if plottableFields.count >= 2 { return plottableFields[1].name }
         return plottableFields.first?.name ?? ""
     }
 
     private var xFieldType: FieldType {
-        plottableFields.first(where: { $0.name == xFieldName })?.fieldType ?? .number
+        if xFieldName == scatterDateFieldName { return .number }
+        return plottableFields.first(where: { $0.name == xFieldName })?.fieldType ?? .number
     }
 
     private var yFieldType: FieldType {
-        plottableFields.first(where: { $0.name == yFieldName })?.fieldType ?? .number
+        if yFieldName == scatterDateFieldName { return .number }
+        return plottableFields.first(where: { $0.name == yFieldName })?.fieldType ?? .number
     }
+
+    private var xIsDate: Bool { xFieldName == scatterDateFieldName }
+    private var yIsDate: Bool { yFieldName == scatterDateFieldName }
 
     private var filteredSessions: [Session] {
         filter.apply(to: sessions)
@@ -379,8 +394,8 @@ struct ScatterPlotView: View {
             Divider().background(Theme.hairline)
 
             HStack(spacing: 20) {
-                tooltipStat(label: xFieldName, value: point.x, fieldType: xFieldType)
-                tooltipStat(label: yFieldName, value: point.y, fieldType: yFieldType)
+                tooltipStat(label: xFieldName, value: point.x, fieldType: xFieldType, isDate: xIsDate)
+                tooltipStat(label: yFieldName, value: point.y, fieldType: yFieldType, isDate: yIsDate)
                 Spacer()
             }
 
@@ -421,14 +436,14 @@ struct ScatterPlotView: View {
         .padding(.horizontal, 28)
     }
 
-    private func tooltipStat(label: String, value: Double, fieldType: FieldType) -> some View {
+    private func tooltipStat(label: String, value: Double, fieldType: FieldType, isDate: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label.uppercased())
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.2)
                 .foregroundColor(Theme.textSecondary)
-            Text(formatValue(value, fieldType: fieldType))
-                .font(.system(size: 26, weight: .heavy, design: .rounded))
+            Text(isDate ? formatDateValue(value) : formatValue(value, fieldType: fieldType))
+                .font(.system(size: isDate ? 16 : 26, weight: .heavy, design: .rounded))
                 .foregroundColor(Theme.accent)
         }
     }
@@ -484,10 +499,10 @@ struct ScatterPlotView: View {
         }
         .chartYAxis {
             AxisMarks(position: .leading) { mark in
-                AxisGridLine().foregroundStyle(Theme.hairline)
+                AxisGridLine().foregroundStyle(Color.white.opacity(0.18))
                 AxisValueLabel {
                     if let val = mark.as(Double.self) {
-                        Text(formatAxisValue(val, fieldType: yFieldType))
+                        Text(yIsDate ? formatDateAxis(val) : formatAxisValue(val, fieldType: yFieldType))
                             .foregroundStyle(Theme.textTertiary)
                             .font(.system(size: 10, weight: .bold))
                     }
@@ -496,10 +511,10 @@ struct ScatterPlotView: View {
         }
         .chartXAxis {
             AxisMarks { mark in
-                AxisGridLine().foregroundStyle(Theme.hairline)
+                AxisGridLine().foregroundStyle(Color.white.opacity(0.18))
                 AxisValueLabel {
                     if let val = mark.as(Double.self) {
-                        Text(formatAxisValue(val, fieldType: xFieldType))
+                        Text(xIsDate ? formatDateAxis(val) : formatAxisValue(val, fieldType: xFieldType))
                             .foregroundStyle(Theme.textTertiary)
                             .font(.system(size: 10, weight: .bold))
                     }
@@ -581,13 +596,13 @@ struct ScatterPlotView: View {
                 Theme.background.ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: 8) {
-                        ForEach(plottableFields) { field in
+                        ForEach(scatterFieldOptions, id: \.name) { option in
                             FieldPickerRow(
-                                name: field.name,
-                                icon: field.fieldType.systemImage,
-                                isSelected: field.name == current
+                                name: option.name,
+                                icon: option.icon,
+                                isSelected: option.name == current
                             ) {
-                                onSelect(field.name)
+                                onSelect(option.name)
                                 if axis == "X" {
                                     showingXPicker = false
                                 } else {
@@ -635,6 +650,26 @@ struct ScatterPlotView: View {
             return String(format: "%.0f", value)
         }
         return String(format: "%.1f", value)
+    }
+
+    private static let dateAxisFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM dd"
+        return f
+    }()
+
+    private static let dateTooltipFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM dd, yyyy"
+        return f
+    }()
+
+    private func formatDateAxis(_ timestamp: Double) -> String {
+        Self.dateAxisFormatter.string(from: Date(timeIntervalSince1970: timestamp))
+    }
+
+    private func formatDateValue(_ timestamp: Double) -> String {
+        Self.dateTooltipFormatter.string(from: Date(timeIntervalSince1970: timestamp))
     }
 }
 
