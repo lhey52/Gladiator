@@ -100,11 +100,35 @@ final class IAPManager: ObservableObject {
         isProUser = hasActive
     }
 
-    // MARK: - Future limit checks (placeholders)
+    // MARK: - Limits
 
-    func checkSessionLimit() -> Bool { true }
-    func checkMetricLimit() -> Bool { true }
-    func checkTrackLimit() -> Bool { true }
+    static let sessionLimit = 10
+    static let metricLimit = 12
+    static let trackLimit = 3
+
+    func checkSessionLimit(currentCount: Int) -> Bool {
+        isProUser || currentCount < Self.sessionLimit
+    }
+
+    func checkMetricLimit(currentCount: Int) -> Bool {
+        isProUser || currentCount < Self.metricLimit
+    }
+
+    func checkTrackLimit(currentCount: Int) -> Bool {
+        isProUser || currentCount < Self.trackLimit
+    }
+
+    func isAtSessionLimit(currentCount: Int) -> Bool {
+        !isProUser && currentCount >= Self.sessionLimit
+    }
+
+    func isAtMetricLimit(currentCount: Int) -> Bool {
+        !isProUser && currentCount >= Self.metricLimit
+    }
+
+    func isAtTrackLimit(currentCount: Int) -> Bool {
+        !isProUser && currentCount >= Self.trackLimit
+    }
 
     // MARK: - Private
 

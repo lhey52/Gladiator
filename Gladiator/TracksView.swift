@@ -14,17 +14,28 @@ struct TracksView: View {
     @State private var showingAdd: Bool = false
     @State private var trackToEdit: Track?
     @State private var trackToDelete: Track?
+    @State private var showingPaywall: Bool = false
+    @ObservedObject private var iap = IAPManager.shared
 
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
-            content
+            VStack(spacing: 0) {
+                content
+                trackLimitBanner
+            }
         }
         .navigationTitle("Tracks")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { showingAdd = true } label: {
+                Button {
+                    if iap.checkTrackLimit(currentCount: tracks.count) {
+                        showingAdd = true
+                    } else {
+                        showingPaywall = true
+                    }
+                } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(Theme.accent)
@@ -64,6 +75,9 @@ struct TracksView: View {
             if let track = trackToDelete {
                 Text("Are you sure you want to delete \"\(track.name)\"?")
             }
+        }
+        .fullScreenCover(isPresented: $showingPaywall) {
+            PaywallView(limitMessage: "You have reached the free limit of \(IAPManager.trackLimit) tracks. Upgrade to Pro for unlimited tracks.")
         }
     }
 
@@ -192,6 +206,31 @@ struct TracksView: View {
         } else {
             for t in tracks { t.isDefault = false }
             track.isDefault = true
+        }
+    }
+
+    @ViewBuilder
+    private var trackLimitBanner: some View {
+        if iap.isAtTrackLimit(currentCount: tracks.count) {
+            Button { showingPaywall = true } label: {
+                HStack(spacing: 8) {
+                    Text("You've reached the free limit. Upgrade to Pro for unlimited tracks.")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.textSecondary)
+                    Text("Upgrade to Pro")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundColor(Theme.accent)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(Theme.surface)
+                .overlay(
+                    Rectangle().frame(height: 1).foregroundColor(Theme.hairline),
+                    alignment: .top
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 }

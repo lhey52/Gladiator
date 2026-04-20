@@ -10,6 +10,8 @@ struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var iap = IAPManager.shared
 
+    var limitMessage: String? = nil
+
     @State private var selectedPlan: String = IAPManager.annualID
 
     private var annualProduct: Product? {
@@ -89,6 +91,15 @@ struct PaywallView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
+
+            if let limitMessage {
+                Text(limitMessage)
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundColor(Theme.accent)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+            }
         }
     }
 

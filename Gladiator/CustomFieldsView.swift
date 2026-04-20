@@ -14,17 +14,28 @@ struct CustomFieldsView: View {
     @State private var showingAdd: Bool = false
     @State private var fieldToEdit: CustomField?
     @State private var fieldToDelete: CustomField?
+    @State private var showingPaywall: Bool = false
+    @ObservedObject private var iap = IAPManager.shared
 
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
-            content
+            VStack(spacing: 0) {
+                content
+                metricLimitBanner
+            }
         }
         .navigationTitle("Session Metrics")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { showingAdd = true } label: {
+                Button {
+                    if iap.checkMetricLimit(currentCount: fields.count) {
+                        showingAdd = true
+                    } else {
+                        showingPaywall = true
+                    }
+                } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(Theme.accent)
@@ -55,6 +66,9 @@ struct CustomFieldsView: View {
             if let field = fieldToDelete {
                 Text("Are you sure you want to delete \"\(field.name)\"? This cannot be undone.")
             }
+        }
+        .fullScreenCover(isPresented: $showingPaywall) {
+            PaywallView(limitMessage: "You have reached the free limit of \(IAPManager.metricLimit) metrics. Upgrade to Pro for unlimited metrics.")
         }
     }
 
@@ -118,6 +132,31 @@ struct CustomFieldsView: View {
         ordered.move(fromOffsets: source, toOffset: destination)
         for (index, field) in ordered.enumerated() {
             field.sortOrder = index
+        }
+    }
+
+    @ViewBuilder
+    private var metricLimitBanner: some View {
+        if iap.isAtMetricLimit(currentCount: fields.count) {
+            Button { showingPaywall = true } label: {
+                HStack(spacing: 8) {
+                    Text("You've reached the free limit. Upgrade to Pro for unlimited metrics.")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.textSecondary)
+                    Text("Upgrade to Pro")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundColor(Theme.accent)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(Theme.surface)
+                .overlay(
+                    Rectangle().frame(height: 1).foregroundColor(Theme.hairline),
+                    alignment: .top
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 }

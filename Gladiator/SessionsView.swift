@@ -21,6 +21,8 @@ struct SessionsView: View {
     @State private var toastIcon: String = ""
     @State private var toastText: String = ""
     @State private var showToast: Bool = false
+    @State private var showingPaywall: Bool = false
+    @ObservedObject private var iap = IAPManager.shared
     @FocusState private var searchFocused: Bool
 
     private var filteredSessions: [Session] {
@@ -45,6 +47,7 @@ struct SessionsView: View {
                     searchBar
                     filterBar
                     content
+                    limitBanner
                 }
 
                 if showToast {
@@ -87,7 +90,11 @@ struct SessionsView: View {
                         .disabled(selectedIDs.isEmpty)
                     } else {
                         Button {
-                            showingAdd = true
+                            if iap.checkSessionLimit(currentCount: sessions.count) {
+                                showingAdd = true
+                            } else {
+                                showingPaywall = true
+                            }
                         } label: {
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 20, weight: .bold))
@@ -125,6 +132,34 @@ struct SessionsView: View {
                     )
                 }
             }
+            .fullScreenCover(isPresented: $showingPaywall) {
+                PaywallView(limitMessage: "You have reached the free limit of \(IAPManager.sessionLimit) sessions. Upgrade to Pro for unlimited sessions.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var limitBanner: some View {
+        if iap.isAtSessionLimit(currentCount: sessions.count) {
+            Button { showingPaywall = true } label: {
+                HStack(spacing: 8) {
+                    Text("You've reached the free limit. Upgrade to Pro for unlimited sessions.")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.textSecondary)
+                    Text("Upgrade to Pro")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundColor(Theme.accent)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(Theme.surface)
+                .overlay(
+                    Rectangle().frame(height: 1).foregroundColor(Theme.hairline),
+                    alignment: .top
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
