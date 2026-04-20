@@ -115,67 +115,34 @@ struct AnalyticsView: View {
             }
 
             ZStack {
-                VStack(spacing: 14) {
-                    Text(currentMessage)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Theme.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .id(insightIndex)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .leading).combined(with: .opacity)
-                        ))
-
-                    HStack(spacing: 16) {
-                        Spacer()
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                insightIndex = max(0, insightIndex - 1)
-                            }
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(insightIndex > 0 ? Theme.accent : Theme.textTertiary)
-                        }
-                        .disabled(insightIndex <= 0)
-
-                        Text("\(min(insightIndex, max(insights.count, 1) - 1) + 1) of \(max(insights.count, 1))")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(Theme.textSecondary)
-
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                insightIndex = min(insights.count - 1, insightIndex + 1)
-                            }
-                        } label: {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(insightIndex < insights.count - 1 ? Theme.accent : Theme.textTertiary)
-                        }
-                        .disabled(insightIndex >= insights.count - 1)
-                        Spacer()
-                    }
-                }
-                .blur(radius: iap.isProUser ? 0 : 6)
-                .allowsHitTesting(iap.isProUser)
+                Text(currentMessage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .id(insightIndex)
+                    .blur(radius: iap.isProUser ? 0 : 6)
 
                 if !iap.isProUser {
-                    Button { showingPaywall = true } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "lock.fill")
-                                .font(.system(size: 12, weight: .bold))
-                            Text("UNLOCK PRO")
-                                .font(.system(size: 12, weight: .heavy))
-                                .tracking(1.5)
-                        }
-                        .foregroundColor(Theme.accent)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Theme.surface))
-                        .overlay(Capsule().stroke(Theme.accent.opacity(0.5), lineWidth: 1))
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("UNLOCK PRO")
+                            .font(.system(size: 12, weight: .heavy))
+                            .tracking(1.5)
                     }
+                    .foregroundColor(Theme.accent)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Theme.surface))
+                    .overlay(Capsule().stroke(Theme.accent.opacity(0.5), lineWidth: 1))
                 }
+            }
+
+            if iap.isProUser {
+                insightNavigationPro
+            } else {
+                insightNavigationLocked
             }
         }
         .padding(20)
@@ -189,7 +156,61 @@ struct AnalyticsView: View {
                 .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
         )
         .shadow(color: Theme.accent.opacity(0.18), radius: 18)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !iap.isProUser { showingPaywall = true }
+        }
         .animation(.easeInOut(duration: 0.25), value: insightIndex)
+    }
+
+    private var insightNavigationPro: some View {
+        HStack(spacing: 16) {
+            Spacer()
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    insightIndex = max(0, insightIndex - 1)
+                }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(insightIndex > 0 ? Theme.accent : Theme.textTertiary)
+            }
+            .disabled(insightIndex <= 0)
+
+            Text("\(min(insightIndex, max(insights.count, 1) - 1) + 1) of \(max(insights.count, 1))")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Theme.textSecondary)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    insightIndex = min(insights.count - 1, insightIndex + 1)
+                }
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(insightIndex < insights.count - 1 ? Theme.accent : Theme.textTertiary)
+            }
+            .disabled(insightIndex >= insights.count - 1)
+            Spacer()
+        }
+    }
+
+    private var insightNavigationLocked: some View {
+        HStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "chevron.left")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(Theme.textTertiary)
+
+            Text("\(min(insightIndex, max(insights.count, 1) - 1) + 1) of \(max(insights.count, 1))")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Theme.textSecondary)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(insights.count > 1 ? Theme.accent : Theme.textTertiary)
+            Spacer()
+        }
     }
 }
 
