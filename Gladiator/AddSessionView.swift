@@ -17,21 +17,24 @@ struct AddSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
     private var customFields: [CustomField]
+    @Query(sort: [SortDescriptor(\Track.name)])
+    private var tracks: [Track]
 
     @AppStorage("sessionFormTipDismissed") private var tipDismissed: Bool = false
     @State private var date: Date = .now
     @State private var trackName: String = ""
+    @State private var didLoadDefault: Bool = false
     @State private var sessionType: SessionType = .practice
     @State private var notes: String = ""
     @State private var fieldEntries: [String: String] = [:]
     @FocusState private var focusedField: SessionFormField?
 
     private var canSave: Bool {
-        !trackName.trimmingCharacters(in: .whitespaces).isEmpty
+        !trackName.isEmpty
     }
 
     private var allFields: [SessionFormField] {
-        var result: [SessionFormField] = [.track]
+        var result: [SessionFormField] = []
         for field in customFields {
             result.append(.custom(field.name))
         }
@@ -52,6 +55,13 @@ struct AddSessionView: View {
             .keyboardToolbar(focusedField: $focusedField, fields: allFields)
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            guard !didLoadDefault else { return }
+            didLoadDefault = true
+            if let defaultTrack = tracks.first(where: { $0.isDefault }) {
+                trackName = defaultTrack.name
+            }
+        }
     }
 
     private var formScroll: some View {
@@ -115,16 +125,17 @@ struct AddSessionView: View {
 
     private var trackCard: some View {
         fieldCard(label: "TRACK") {
-            TextField(
-                "",
-                text: $trackName,
-                prompt: Text("e.g. Silverstone GP").foregroundColor(Theme.textTertiary)
-            )
+            Picker("", selection: $trackName) {
+                Text("Select Track")
+                    .foregroundColor(Theme.textTertiary)
+                    .tag("")
+                ForEach(tracks) { track in
+                    Text(track.name).tag(track.name)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Theme.accent)
             .font(.system(size: 18, weight: .heavy))
-            .foregroundColor(Theme.textPrimary)
-            .textInputAutocapitalization(.words)
-            .autocorrectionDisabled()
-            .focused($focusedField, equals: .track)
         }
     }
 

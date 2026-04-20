@@ -17,6 +17,8 @@ struct EditSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
     private var customFields: [CustomField]
+    @Query(sort: [SortDescriptor(\Track.name)])
+    private var tracks: [Track]
 
     let session: Session
 
@@ -29,11 +31,11 @@ struct EditSessionView: View {
     @FocusState private var focusedField: EditSessionField?
 
     private var canSave: Bool {
-        !trackName.trimmingCharacters(in: .whitespaces).isEmpty
+        !trackName.isEmpty
     }
 
     private var allFields: [EditSessionField] {
-        var result: [EditSessionField] = [.track]
+        var result: [EditSessionField] = []
         for field in customFields {
             result.append(.custom(field.name))
         }
@@ -118,16 +120,17 @@ struct EditSessionView: View {
 
     private var trackCard: some View {
         fieldCard(label: "TRACK") {
-            TextField(
-                "",
-                text: $trackName,
-                prompt: Text("e.g. Silverstone GP").foregroundColor(Theme.textTertiary)
-            )
+            Picker("", selection: $trackName) {
+                Text("Select Track")
+                    .foregroundColor(Theme.textTertiary)
+                    .tag("")
+                ForEach(tracks) { track in
+                    Text(track.name).tag(track.name)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Theme.accent)
             .font(.system(size: 18, weight: .heavy))
-            .foregroundColor(Theme.textPrimary)
-            .textInputAutocapitalization(.words)
-            .autocorrectionDisabled()
-            .focused($focusedField, equals: .track)
         }
     }
 

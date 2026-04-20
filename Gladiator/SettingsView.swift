@@ -10,7 +10,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                NavigationLink(destination: CustomFieldsView()) {
+                NavigationLink(destination: SessionCustomizationView()) {
                     Text("Session Customization")
                         .font(.system(size: 15, weight: .heavy))
                         .foregroundColor(Theme.textPrimary)
