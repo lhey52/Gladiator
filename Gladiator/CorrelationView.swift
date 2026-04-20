@@ -18,6 +18,8 @@ struct CorrelationView: View {
 
     @State private var showingPickerA: Bool = false
     @State private var showingPickerB: Bool = false
+    @State private var filter = AnalyticsFilterState()
+    @State private var showingFilter: Bool = false
 
     private var plottableFields: [CustomField] {
         allFields.filter { $0.fieldType.isPlottable }
@@ -35,9 +37,13 @@ struct CorrelationView: View {
         !fieldAName.isEmpty && !fieldBName.isEmpty && fieldAName != fieldBName
     }
 
+    private var filteredSessions: [Session] {
+        filter.apply(to: sessions)
+    }
+
     private var result: CorrelationResult? {
         guard canCalculate else { return nil }
-        return CorrelationEngine.calculate(sessions: sessions, fieldA: fieldAName, fieldB: fieldBName)
+        return CorrelationEngine.calculate(sessions: filteredSessions, fieldA: fieldAName, fieldB: fieldBName)
     }
 
     var body: some View {
@@ -56,6 +62,14 @@ struct CorrelationView: View {
                             .foregroundColor(Theme.textSecondary)
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    FilterButton(isActive: filter.isActive) {
+                        showingFilter = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showingFilter) {
+                FilterSheetView(filter: filter)
             }
         }
         .preferredColorScheme(.dark)

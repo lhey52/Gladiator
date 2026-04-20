@@ -27,13 +27,19 @@ struct SessionComparisonView: View {
     @State private var showingPickerA: Bool = false
     @State private var showingPickerB: Bool = false
     @State private var higherIsBetter: [String: Bool] = [:]
+    @State private var filter = AnalyticsFilterState()
+    @State private var showingFilter: Bool = false
 
     private var plottableFields: [CustomField] {
         allFields.filter { $0.fieldType.isPlottable }
     }
 
+    private var filteredSessions: [Session] {
+        filter.apply(to: sessions)
+    }
+
     private var availableYears: [Int] {
-        let years = Set(sessions.map { Calendar.current.component(.year, from: $0.date) })
+        let years = Set(filteredSessions.map { Calendar.current.component(.year, from: $0.date) })
         return years.sorted(by: >)
     }
 
@@ -53,6 +59,14 @@ struct SessionComparisonView: View {
                             .foregroundColor(Theme.textSecondary)
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    FilterButton(isActive: filter.isActive) {
+                        showingFilter = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showingFilter) {
+                FilterSheetView(filter: filter)
             }
         }
         .preferredColorScheme(.dark)
@@ -475,8 +489,8 @@ struct SessionComparisonView: View {
 
     private func buildYearComparison() -> ComparisonData? {
         let cal = Calendar.current
-        let a = sessions.filter { cal.component(.year, from: $0.date) == yearA }
-        let b = sessions.filter { cal.component(.year, from: $0.date) == yearB }
+        let a = filteredSessions.filter { cal.component(.year, from: $0.date) == yearA }
+        let b = filteredSessions.filter { cal.component(.year, from: $0.date) == yearB }
         guard !a.isEmpty || !b.isEmpty else { return nil }
         let metrics = ComparisonEngine.comparePeriodAverages(
             sessionsA: a, sessionsB: b,
@@ -492,8 +506,8 @@ struct SessionComparisonView: View {
 
     private func buildMonthComparison() -> ComparisonData? {
         let cal = Calendar.current
-        let a = sessions.filter { cal.isDate($0.date, equalTo: monthA, toGranularity: .month) }
-        let b = sessions.filter { cal.isDate($0.date, equalTo: monthB, toGranularity: .month) }
+        let a = filteredSessions.filter { cal.isDate($0.date, equalTo: monthA, toGranularity: .month) }
+        let b = filteredSessions.filter { cal.isDate($0.date, equalTo: monthB, toGranularity: .month) }
         guard !a.isEmpty || !b.isEmpty else { return nil }
         let metrics = ComparisonEngine.comparePeriodAverages(
             sessionsA: a, sessionsB: b,
@@ -509,8 +523,8 @@ struct SessionComparisonView: View {
     }
 
     private func buildCustomComparison() -> ComparisonData? {
-        let a = sessions.filter { $0.date >= customStartA && $0.date <= customEndA }
-        let b = sessions.filter { $0.date >= customStartB && $0.date <= customEndB }
+        let a = filteredSessions.filter { $0.date >= customStartA && $0.date <= customEndA }
+        let b = filteredSessions.filter { $0.date >= customStartB && $0.date <= customEndB }
         guard !a.isEmpty || !b.isEmpty else { return nil }
         let metrics = ComparisonEngine.comparePeriodAverages(
             sessionsA: a, sessionsB: b,

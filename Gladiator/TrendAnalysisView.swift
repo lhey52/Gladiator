@@ -17,6 +17,8 @@ struct TrendAnalysisView: View {
     @AppStorage("trendFieldName") private var storedField: String = ""
     @State private var showingPicker: Bool = false
     @State private var windowSize: Int = 5
+    @State private var filter = AnalyticsFilterState()
+    @State private var showingFilter: Bool = false
 
     private var plottableFields: [CustomField] {
         allFields.filter { $0.fieldType.isPlottable }
@@ -33,9 +35,13 @@ struct TrendAnalysisView: View {
         plottableFields.first(where: { $0.name == selectedFieldName })?.fieldType ?? .number
     }
 
+    private var filteredSessions: [Session] {
+        filter.apply(to: sessions)
+    }
+
     private var dataPoints: [TrendPoint] {
         var result: [TrendPoint] = []
-        for (index, session) in sessions.enumerated() {
+        for (index, session) in filteredSessions.enumerated() {
             guard let fv = session.fieldValues.first(where: { $0.fieldName == selectedFieldName }),
                   let val = Double(fv.value) else { continue }
             result.append(TrendPoint(
@@ -94,6 +100,14 @@ struct TrendAnalysisView: View {
                             .foregroundColor(Theme.textSecondary)
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    FilterButton(isActive: filter.isActive) {
+                        showingFilter = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showingFilter) {
+                FilterSheetView(filter: filter)
             }
         }
         .preferredColorScheme(.dark)

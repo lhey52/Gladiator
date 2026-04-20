@@ -21,6 +21,8 @@ struct ScatterPlotView: View {
     @State private var showingXPicker: Bool = false
     @State private var showingYPicker: Bool = false
     @State private var navigateToSession: Session?
+    @State private var filter = AnalyticsFilterState()
+    @State private var showingFilter: Bool = false
 
     @State private var zoomScale: CGFloat = 1.0
     @State private var gestureScale: CGFloat = 1.0
@@ -55,8 +57,12 @@ struct ScatterPlotView: View {
         plottableFields.first(where: { $0.name == yFieldName })?.fieldType ?? .number
     }
 
+    private var filteredSessions: [Session] {
+        filter.apply(to: sessions)
+    }
+
     private var points: [ScatterPoint] {
-        buildPoints(sessions: sessions, xField: xFieldName, yField: yFieldName)
+        buildPoints(sessions: filteredSessions, xField: xFieldName, yField: yFieldName)
     }
 
     private var selectedPoint: ScatterPoint? {
@@ -134,6 +140,14 @@ struct ScatterPlotView: View {
                             .foregroundColor(Theme.textSecondary)
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    FilterButton(isActive: filter.isActive) {
+                        showingFilter = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showingFilter) {
+                FilterSheetView(filter: filter)
             }
             .navigationDestination(item: $navigateToSession) { session in
                 SessionDetailView(session: session)

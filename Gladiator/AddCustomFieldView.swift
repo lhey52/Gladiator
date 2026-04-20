@@ -13,6 +13,8 @@ private enum FieldFormField: Hashable {
 struct AddCustomFieldView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
+    private var existingFields: [CustomField]
 
     let nextSortOrder: Int
 
@@ -20,8 +22,14 @@ struct AddCustomFieldView: View {
     @State private var fieldType: FieldType = .number
     @FocusState private var focusedField: FieldFormField?
 
+    private var isDuplicate: Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !trimmed.isEmpty else { return false }
+        return existingFields.contains { $0.name.lowercased() == trimmed }
+    }
+
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && !isDuplicate
     }
 
     var body: some View {
@@ -65,16 +73,23 @@ struct AddCustomFieldView: View {
 
     private var nameCard: some View {
         fieldCard(label: "METRIC NAME") {
-            TextField(
-                "",
-                text: $name,
-                prompt: Text("e.g. Lap Time, Tire Pressure").foregroundColor(Theme.textTertiary)
-            )
-            .font(.system(size: 18, weight: .heavy))
-            .foregroundColor(Theme.textPrimary)
-            .textInputAutocapitalization(.words)
-            .autocorrectionDisabled()
-            .focused($focusedField, equals: .name)
+            VStack(alignment: .leading, spacing: 8) {
+                TextField(
+                    "",
+                    text: $name,
+                    prompt: Text("e.g. Lap Time, Tire Pressure").foregroundColor(Theme.textTertiary)
+                )
+                .font(.system(size: 18, weight: .heavy))
+                .foregroundColor(Theme.textPrimary)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .focused($focusedField, equals: .name)
+                if isDuplicate {
+                    Text("A metric with this name already exists")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.red)
+                }
+            }
         }
     }
 

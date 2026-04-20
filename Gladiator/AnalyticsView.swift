@@ -4,8 +4,26 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct AnalyticsView: View {
+    @Query(sort: [SortDescriptor(\Session.date, order: .reverse)])
+    private var sessions: [Session]
+    @Query(sort: [SortDescriptor(\Track.name)])
+    private var tracks: [Track]
+    @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
+    private var fields: [CustomField]
+
+    @State private var insightIndex: Int = 0
+
+    private var insights: [AIInsight] {
+        AIInsightsEngine.generate(sessions: sessions, tracks: tracks, fields: fields)
+    }
+
+    private var hasMultipleInsights: Bool {
+        insights.count > 1
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -13,6 +31,16 @@ struct AnalyticsView: View {
 
                 ScrollView {
                     VStack(spacing: 14) {
+                        aiInsightCard
+
+                        Text("TOOLS")
+                            .font(.system(size: 11, weight: .bold))
+                            .tracking(2)
+                            .foregroundColor(Theme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.leading, 4)
+                            .padding(.top, 6)
+
                         AnalyticsCard(
                             icon: "chart.dots.scatter",
                             title: "Scatter Plot",
@@ -60,6 +88,80 @@ struct AnalyticsView: View {
             .navigationTitle("Analytics")
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    private var currentMessage: String {
+        guard !insights.isEmpty else { return AIInsightsEngine.defaultMessage }
+        let clamped = min(insightIndex, insights.count - 1)
+        return insights[clamped].message
+    }
+
+    private var aiInsightCard: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(Theme.accent)
+                Text("AI INSIGHT (BETA)")
+                    .font(.system(size: 13, weight: .heavy))
+                    .tracking(2)
+                    .foregroundColor(Theme.accent)
+                Spacer()
+            }
+
+            Text(currentMessage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .id(insightIndex)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
+
+            HStack(spacing: 16) {
+                    Spacer()
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            insightIndex = max(0, insightIndex - 1)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(insightIndex > 0 ? Theme.accent : Theme.textTertiary)
+                    }
+                    .disabled(insightIndex <= 0)
+
+                    Text("\(min(insightIndex, max(insights.count, 1) - 1) + 1) of \(max(insights.count, 1))")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Theme.textSecondary)
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            insightIndex = min(insights.count - 1, insightIndex + 1)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(insightIndex < insights.count - 1 ? Theme.accent : Theme.textTertiary)
+                    }
+                    .disabled(insightIndex >= insights.count - 1)
+                    Spacer()
+                }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
+        )
+        .shadow(color: Theme.accent.opacity(0.18), radius: 18)
+        .animation(.easeInOut(duration: 0.25), value: insightIndex)
     }
 }
 
@@ -121,6 +223,6 @@ private struct AnalyticsCard<Destination: View>: View {
 
 #Preview {
     AnalyticsView()
-        .modelContainer(for: [Session.self, CustomField.self, FieldValue.self], inMemory: true)
+        .modelContainer(for: [Session.self, CustomField.self, FieldValue.self, Track.self], inMemory: true)
         .preferredColorScheme(.dark)
 }

@@ -13,6 +13,13 @@ struct PersonalBestsView: View {
     @Query(sort: [SortDescriptor(\Session.date, order: .reverse)])
     private var sessions: [Session]
 
+    @State private var filter = AnalyticsFilterState()
+    @State private var showingFilter: Bool = false
+
+    private var filteredSessions: [Session] {
+        filter.apply(to: sessions)
+    }
+
     private var plottableFields: [CustomField] {
         allFields.filter { $0.fieldType.isPlottable }
     }
@@ -33,6 +40,14 @@ struct PersonalBestsView: View {
                             .foregroundColor(Theme.textSecondary)
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    FilterButton(isActive: filter.isActive) {
+                        showingFilter = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showingFilter) {
+                FilterSheetView(filter: filter)
             }
         }
         .preferredColorScheme(.dark)
@@ -191,7 +206,7 @@ struct PersonalBestsView: View {
     private func findBest(for field: CustomField) -> BestRecord? {
         var best: BestRecord?
         let isTime = field.fieldType == .time
-        for session in sessions {
+        for session in filteredSessions {
             guard let fv = session.fieldValues.first(where: { $0.fieldName == field.name }),
                   let val = Double(fv.value) else { continue }
             let isBetter: Bool

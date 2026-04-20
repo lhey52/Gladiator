@@ -12,9 +12,7 @@ struct TracksView: View {
     private var tracks: [Track]
 
     @State private var showingAdd: Bool = false
-    @State private var newTrackName: String = ""
     @State private var trackToEdit: Track?
-    @State private var editName: String = ""
     @State private var trackToDelete: Track?
 
     var body: some View {
@@ -33,18 +31,28 @@ struct TracksView: View {
                 }
             }
         }
-        .alert("New Track", isPresented: $showingAdd) {
-            TextField("Track name", text: $newTrackName)
-            Button("Cancel", role: .cancel) { newTrackName = "" }
-            Button("Add") { addTrack() }
+        .sheet(isPresented: $showingAdd) {
+            TrackFormSheet(
+                title: "New Track",
+                buttonLabel: "Add",
+                initialName: "",
+                existingNames: tracks.map(\.name),
+                excludeName: nil
+            ) { name in
+                let track = Track(name: name)
+                modelContext.insert(track)
+            }
         }
-        .alert("Edit Track", isPresented: Binding(
-            get: { trackToEdit != nil },
-            set: { if !$0 { trackToEdit = nil } }
-        )) {
-            TextField("Track name", text: $editName)
-            Button("Cancel", role: .cancel) { trackToEdit = nil }
-            Button("Save") { saveEdit() }
+        .sheet(item: $trackToEdit) { track in
+            TrackFormSheet(
+                title: "Edit Track",
+                buttonLabel: "Save",
+                initialName: track.name,
+                existingNames: tracks.map(\.name),
+                excludeName: track.name
+            ) { newName in
+                track.name = newName
+            }
         }
         .alert("Delete Track", isPresented: Binding(
             get: { trackToDelete != nil },
@@ -150,7 +158,6 @@ struct TracksView: View {
 
             Menu {
                 Button {
-                    editName = track.name
                     trackToEdit = track
                 } label: {
                     Label("Edit", systemImage: "pencil")
@@ -173,22 +180,6 @@ struct TracksView: View {
         .contentShape(Rectangle())
     }
 
-    private func addTrack() {
-        let trimmed = newTrackName.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { newTrackName = ""; return }
-        let track = Track(name: trimmed)
-        modelContext.insert(track)
-        newTrackName = ""
-    }
-
-    private func saveEdit() {
-        guard let track = trackToEdit else { return }
-        let trimmed = editName.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { trackToEdit = nil; return }
-        track.name = trimmed
-        trackToEdit = nil
-    }
-
     private func confirmDelete() {
         guard let track = trackToDelete else { return }
         modelContext.delete(track)
@@ -202,6 +193,96 @@ struct TracksView: View {
             for t in tracks { t.isDefault = false }
             track.isDefault = true
         }
+    }
+}
+
+private struct TrackFormSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let title: String
+    let buttonLabel: String
+    let initialName: String
+    let existingNames: [String]
+    let excludeName: String?
+    let onSave: (String) -> Void
+
+    @State private var name: String = ""
+
+    private var trimmed: String {
+        name.trimmingCharacters(in: .whitespaces)
+    }
+
+    private var isDuplicate: Bool {
+        guard !trimmed.isEmpty else { return false }
+        let lower = trimmed.lowercased()
+        return existingNames.contains { existing in
+            let isExcluded = excludeName.map { $0.lowercased() == existing.lowercased() } ?? false
+            return !isExcluded && existing.lowercased() == lower
+        }
+    }
+
+    private var canSave: Bool {
+        !trimmed.isEmpty && !isDuplicate
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                    .dismissKeyboardOnTap()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("TRACK NAME")
+                            .font(.system(size: 10, weight: .heavy))
+                            .tracking(1.8)
+                            .foregroundColor(Theme.accent)
+                        TextField(
+                            "",
+                            text: $name,
+                            prompt: Text("e.g. Silverstone GP").foregroundColor(Theme.textTertiary)
+                        )
+                        .font(.system(size: 18, weight: .heavy))
+                        .foregroundColor(Theme.textPrimary)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        if isDuplicate {
+                            Text("A track with this name already exists")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.red)
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Theme.surface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Theme.hairline, lineWidth: 1)
+                    )
+                    .padding(20)
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(Theme.textSecondary)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(buttonLabel) {
+                        onSave(trimmed)
+                        dismiss()
+                    }
+                    .font(.system(size: 15, weight: .heavy))
+                    .foregroundColor(canSave ? Theme.accent : Theme.textTertiary)
+                    .disabled(!canSave)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear { name = initialName }
     }
 }
 
