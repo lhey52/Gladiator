@@ -8,6 +8,7 @@ import Foundation
 struct CorrelationPairResult: Identifiable {
     let id = UUID()
     let trackName: String
+    let vehicleName: String
     let fieldA: String
     let fieldB: String
     let r: Double
@@ -18,20 +19,26 @@ enum BackgroundCorrelationScanner {
 
     static let minimumSessions = 5
 
+    private struct GroupKey: Hashable {
+        let track: String
+        let vehicle: String
+    }
+
     static func scanAll(sessions: [Session], fields: [CustomField]) -> [CorrelationPairResult] {
         let plottable = fields.filter { $0.fieldType.isPlottable }
         guard plottable.count >= 2 else { return [] }
 
-        let byTrack = Dictionary(grouping: sessions) { $0.trackName }
+        let grouped = Dictionary(grouping: sessions) { GroupKey(track: $0.trackName, vehicle: $0.vehicleName) }
         var results: [CorrelationPairResult] = []
 
-        for (trackName, trackSessions) in byTrack {
-            guard !trackName.isEmpty else { continue }
+        for (key, groupSessions) in grouped {
+            guard !key.track.isEmpty else { continue }
             for i in 0..<plottable.count {
                 for j in (i + 1)..<plottable.count {
                     if let result = correlate(
-                        trackName: trackName,
-                        sessions: trackSessions,
+                        trackName: key.track,
+                        vehicleName: key.vehicle,
+                        sessions: groupSessions,
                         fieldA: plottable[i].name,
                         fieldB: plottable[j].name
                     ) {
@@ -44,7 +51,7 @@ enum BackgroundCorrelationScanner {
         return results
     }
 
-    private static func correlate(trackName: String, sessions: [Session], fieldA: String, fieldB: String) -> CorrelationPairResult? {
+    private static func correlate(trackName: String, vehicleName: String, sessions: [Session], fieldA: String, fieldB: String) -> CorrelationPairResult? {
         var xs: [Double] = []
         var ys: [Double] = []
 
@@ -63,6 +70,7 @@ enum BackgroundCorrelationScanner {
         let clamped = max(-1, min(1, r))
         return CorrelationPairResult(
             trackName: trackName,
+            vehicleName: vehicleName,
             fieldA: fieldA,
             fieldB: fieldB,
             r: clamped,

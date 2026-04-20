@@ -15,6 +15,7 @@ enum TrendClassification {
 struct TrendScanResult: Identifiable {
     let id = UUID()
     let trackName: String
+    let vehicleName: String
     let fieldName: String
     let fieldType: FieldType
     let classification: TrendClassification
@@ -27,20 +28,26 @@ enum BackgroundTrendScanner {
     static let plateauMinSessions = 10
     static let slopeThreshold = 0.05
 
+    private struct GroupKey: Hashable {
+        let track: String
+        let vehicle: String
+    }
+
     static func scanAll(sessions: [Session], fields: [CustomField]) -> [TrendScanResult] {
         let plottable = fields.filter { $0.fieldType.isPlottable }
         guard !plottable.isEmpty else { return [] }
 
-        let byTrack = Dictionary(grouping: sessions) { $0.trackName }
+        let grouped = Dictionary(grouping: sessions) { GroupKey(track: $0.trackName, vehicle: $0.vehicleName) }
         var results: [TrendScanResult] = []
 
-        for (trackName, trackSessions) in byTrack {
-            guard !trackName.isEmpty else { continue }
-            let sorted = trackSessions.sorted { $0.date < $1.date }
+        for (key, groupSessions) in grouped {
+            guard !key.track.isEmpty else { continue }
+            let sorted = groupSessions.sorted { $0.date < $1.date }
 
             for field in plottable {
                 if let result = analyze(
-                    trackName: trackName,
+                    trackName: key.track,
+                    vehicleName: key.vehicle,
                     sessions: sorted,
                     fieldName: field.name,
                     fieldType: field.fieldType
@@ -53,7 +60,7 @@ enum BackgroundTrendScanner {
         return results
     }
 
-    private static func analyze(trackName: String, sessions: [Session], fieldName: String, fieldType: FieldType) -> TrendScanResult? {
+    private static func analyze(trackName: String, vehicleName: String, sessions: [Session], fieldName: String, fieldType: FieldType) -> TrendScanResult? {
         let values: [Double] = sessions.compactMap { session in
             guard let fv = session.fieldValues.first(where: { $0.fieldName == fieldName }) else { return nil }
             return Double(fv.value)
@@ -69,6 +76,7 @@ enum BackgroundTrendScanner {
             let classification: TrendClassification = values.count >= plateauMinSessions ? .plateau : .stable
             return TrendScanResult(
                 trackName: trackName,
+                vehicleName: vehicleName,
                 fieldName: fieldName,
                 fieldType: fieldType,
                 classification: classification,
@@ -90,6 +98,7 @@ enum BackgroundTrendScanner {
 
         return TrendScanResult(
             trackName: trackName,
+            vehicleName: vehicleName,
             fieldName: fieldName,
             fieldType: fieldType,
             classification: classification,

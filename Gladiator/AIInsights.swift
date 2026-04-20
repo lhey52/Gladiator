@@ -15,8 +15,8 @@ enum AIInsightsEngine {
 
     // MARK: - Priority rankings (lower = higher priority, edit here)
 
-    private static let priorityLowSessionTracks = 1
-    private static let priorityStaleTracks = 2
+    private static let priorityLowSessionCombos = 1
+    private static let priorityStaleCombos = 2
     private static let priorityPersonalBestLow = 3
     private static let priorityPersonalBestHigh = 4
     private static let priorityVeryStrongCorrelation = 5
@@ -29,22 +29,34 @@ enum AIInsightsEngine {
 
     // MARK: - Thresholds (edit here)
 
-    private static let minSessionsPerTrack = 5
+    private static let minSessionsPerCombo = 5
     private static let staleDaysThreshold = 30
 
     // MARK: - Default message
 
     static let defaultMessage = "No additional insights at this time. As more sessions are added, the insights here will automatically refresh."
 
+    // MARK: - Group key
+
+    private struct ComboKey: Hashable {
+        let track: String
+        let vehicle: String
+
+        var label: String {
+            if vehicle.isEmpty { return track }
+            return "\(track) in \(vehicle)"
+        }
+    }
+
     // MARK: - Generate insights
 
     static func generate(sessions: [Session], tracks: [Track], fields: [CustomField] = []) -> [AIInsight] {
         var insights: [AIInsight] = []
 
-        if let insight = lowSessionTrackInsight(sessions: sessions, tracks: tracks) {
+        if let insight = lowSessionComboInsight(sessions: sessions) {
             insights.append(insight)
         }
-        if let insight = staleTrackInsight(sessions: sessions, tracks: tracks) {
+        if let insight = staleComboInsight(sessions: sessions) {
             insights.append(insight)
         }
         insights.append(contentsOf: personalBestLowInsights(sessions: sessions, fields: fields))
@@ -56,53 +68,52 @@ enum AIInsightsEngine {
         return Array(insights.prefix(5))
     }
 
-    // MARK: - Insight: Tracks with fewer than N sessions
+    // MARK: - Insight: Combos with fewer than N sessions
 
-    private static func lowSessionTrackInsight(sessions: [Session], tracks: [Track]) -> AIInsight? {
-        let sessionCountByTrack = Dictionary(grouping: sessions, by: { $0.trackName })
-        let lowTracks = tracks.filter { track in
-            let count = sessionCountByTrack[track.name]?.count ?? 0
-            return count > 0 && count < minSessionsPerTrack
+    private static func lowSessionComboInsight(sessions: [Session]) -> AIInsight? {
+        let grouped = Dictionary(grouping: sessions) { ComboKey(track: $0.trackName, vehicle: $0.vehicleName) }
+        let lowCombos = grouped.filter { key, group in
+            !key.track.isEmpty && group.count > 0 && group.count < minSessionsPerCombo
         }
-        guard !lowTracks.isEmpty else { return nil }
-        let names = lowTracks.map(\.name).joined(separator: ", ")
+        guard !lowCombos.isEmpty else { return nil }
+        let names = lowCombos.keys.map(\.label).sorted().joined(separator: ", ")
         return AIInsight(
-            priority: priorityLowSessionTracks,
-            message: "The following tracks have less than \(minSessionsPerTrack) sessions: \(names). Add more sessions to generate additional AI insights and unlock most analytics tools for these tracks."
+            priority: priorityLowSessionCombos,
+            message: "The following track and vehicle combinations have less than \(minSessionsPerCombo) sessions: \(names). Add more sessions to generate additional AI insights and unlock most analytics tools for these combinations."
         )
     }
 
-    // MARK: - Insight: Tracks with no new session in N days
+    // MARK: - Insight: Combos with no new session in N days
 
-    private static func staleTrackInsight(sessions: [Session], tracks: [Track]) -> AIInsight? {
+    private static func staleComboInsight(sessions: [Session]) -> AIInsight? {
         let cutoff = Calendar.current.date(byAdding: .day, value: -staleDaysThreshold, to: .now) ?? .now
-        let latestByTrack = Dictionary(grouping: sessions, by: { $0.trackName })
-            .mapValues { $0.map(\.date).max() ?? .distantPast }
-        let staleTracks = tracks.filter { track in
-            guard let latest = latestByTrack[track.name] else { return false }
+        let grouped = Dictionary(grouping: sessions) { ComboKey(track: $0.trackName, vehicle: $0.vehicleName) }
+        let staleCombos = grouped.filter { key, group in
+            guard !key.track.isEmpty else { return false }
+            let latest = group.map(\.date).max() ?? .distantPast
             return latest < cutoff
         }
-        guard !staleTracks.isEmpty else { return nil }
-        let names = staleTracks.map(\.name).joined(separator: ", ")
+        guard !staleCombos.isEmpty else { return nil }
+        let names = staleCombos.keys.map(\.label).sorted().joined(separator: ", ")
         return AIInsight(
-            priority: priorityStaleTracks,
-            message: "You haven't added new sessions to these tracks in the last \(staleDaysThreshold) days: \(names). Consistent logging improves your analytics accuracy."
+            priority: priorityStaleCombos,
+            message: "You haven't added new sessions for these track and vehicle combinations in the last \(staleDaysThreshold) days: \(names). Consistent logging improves your analytics accuracy."
         )
     }
 
-    // MARK: - Insight: New personal best (lowest, per-track)
+    // MARK: - Insight: New personal best (lowest, per combo)
 
     private static func personalBestLowInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
         let plottable = fields.filter { $0.fieldType.isPlottable }
         guard !plottable.isEmpty else { return [] }
 
-        let byTrack = Dictionary(grouping: sessions) { $0.trackName }
+        let grouped = Dictionary(grouping: sessions) { ComboKey(track: $0.trackName, vehicle: $0.vehicleName) }
         var results: [AIInsight] = []
 
-        for (trackName, trackSessions) in byTrack {
-            guard !trackName.isEmpty, trackSessions.count >= 2 else { continue }
-            guard let latest = trackSessions.max(by: { $0.createdAt < $1.createdAt }) else { continue }
-            let others = trackSessions.filter { $0.persistentModelID != latest.persistentModelID }
+        for (key, comboSessions) in grouped {
+            guard !key.track.isEmpty, comboSessions.count >= 2 else { continue }
+            guard let latest = comboSessions.max(by: { $0.createdAt < $1.createdAt }) else { continue }
+            let others = comboSessions.filter { $0.persistentModelID != latest.persistentModelID }
             guard !others.isEmpty else { continue }
 
             for field in plottable {
@@ -122,26 +133,26 @@ enum AIInsightsEngine {
 
                 results.append(AIInsight(
                     priority: priorityPersonalBestLow,
-                    message: "Your most recent session at \(trackName) recorded your lowest ever \(field.name) at this track: \(display)."
+                    message: "Your most recent session at \(key.label) recorded your lowest ever \(field.name) at this track and vehicle combination: \(display)."
                 ))
             }
         }
         return results
     }
 
-    // MARK: - Insight: New personal best (highest, per-track)
+    // MARK: - Insight: New personal best (highest, per combo)
 
     private static func personalBestHighInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
         let plottable = fields.filter { $0.fieldType.isPlottable }
         guard !plottable.isEmpty else { return [] }
 
-        let byTrack = Dictionary(grouping: sessions) { $0.trackName }
+        let grouped = Dictionary(grouping: sessions) { ComboKey(track: $0.trackName, vehicle: $0.vehicleName) }
         var results: [AIInsight] = []
 
-        for (trackName, trackSessions) in byTrack {
-            guard !trackName.isEmpty, trackSessions.count >= 2 else { continue }
-            guard let latest = trackSessions.max(by: { $0.createdAt < $1.createdAt }) else { continue }
-            let others = trackSessions.filter { $0.persistentModelID != latest.persistentModelID }
+        for (key, comboSessions) in grouped {
+            guard !key.track.isEmpty, comboSessions.count >= 2 else { continue }
+            guard let latest = comboSessions.max(by: { $0.createdAt < $1.createdAt }) else { continue }
+            let others = comboSessions.filter { $0.persistentModelID != latest.persistentModelID }
             guard !others.isEmpty else { continue }
 
             for field in plottable {
@@ -161,9 +172,9 @@ enum AIInsightsEngine {
 
                 let message: String
                 if field.fieldType == .time {
-                    message = "Your most recent session at \(trackName) recorded your highest ever \(field.name) at this track: \(display). This may be worth reviewing."
+                    message = "Your most recent session at \(key.label) recorded your highest ever \(field.name) at this track and vehicle combination: \(display). This may be worth reviewing."
                 } else {
-                    message = "Your most recent session at \(trackName) recorded your highest ever \(field.name) at this track: \(display)."
+                    message = "Your most recent session at \(key.label) recorded your highest ever \(field.name) at this track and vehicle combination: \(display)."
                 }
 
                 results.append(AIInsight(
@@ -186,27 +197,27 @@ enum AIInsightsEngine {
             let n = pair.sampleSize
             let a = pair.fieldA
             let b = pair.fieldB
-            let t = pair.trackName
+            let loc = pair.vehicleName.isEmpty ? pair.trackName : "\(pair.trackName) in \(pair.vehicleName)"
 
             if pair.r >= 0.7 {
                 results.append(AIInsight(
                     priority: priorityVeryStrongCorrelation,
-                    message: "Very strong correlation detected at \(t): higher values of \(a) are very strongly correlated with higher values of \(b) across \(n) sessions."
+                    message: "Very strong correlation detected at \(loc): higher values of \(a) are very strongly correlated with higher values of \(b) across \(n) sessions."
                 ))
             } else if pair.r >= 0.5 {
                 results.append(AIInsight(
                     priority: priorityStrongCorrelation,
-                    message: "Strong correlation detected at \(t): higher values of \(a) are strongly correlated with higher values of \(b) across \(n) sessions."
+                    message: "Strong correlation detected at \(loc): higher values of \(a) are strongly correlated with higher values of \(b) across \(n) sessions."
                 ))
             } else if pair.r <= -0.7 {
                 results.append(AIInsight(
                     priority: priorityVeryStrongNegCorrelation,
-                    message: "Very strong correlation detected at \(t): higher values of \(a) are very strongly correlated with lower values of \(b) across \(n) sessions."
+                    message: "Very strong correlation detected at \(loc): higher values of \(a) are very strongly correlated with lower values of \(b) across \(n) sessions."
                 ))
             } else if pair.r <= -0.5 {
                 results.append(AIInsight(
                     priority: priorityStrongNegCorrelation,
-                    message: "Strong correlation detected at \(t): higher values of \(a) are strongly correlated with lower values of \(b) across \(n) sessions."
+                    message: "Strong correlation detected at \(loc): higher values of \(a) are strongly correlated with lower values of \(b) across \(n) sessions."
                 ))
             }
         }
@@ -225,23 +236,26 @@ enum AIInsightsEngine {
         var results: [AIInsight] = []
 
         for trend in declining {
+            let loc = trend.vehicleName.isEmpty ? trend.trackName : "\(trend.trackName) in \(trend.vehicleName)"
             results.append(AIInsight(
                 priority: priorityTrendDeclining,
-                message: "Declining trend detected at \(trend.trackName): your \(trend.fieldName) has been trending in a negative direction over your last \(trend.sessionCount) sessions. Consider reviewing your setup."
+                message: "Declining trend detected at \(loc): your \(trend.fieldName) has been trending in a negative direction over your last \(trend.sessionCount) sessions. Consider reviewing your setup."
             ))
         }
 
         for trend in improving {
+            let loc = trend.vehicleName.isEmpty ? trend.trackName : "\(trend.trackName) in \(trend.vehicleName)"
             results.append(AIInsight(
                 priority: priorityTrendImproving,
-                message: "Improving trend detected at \(trend.trackName): your \(trend.fieldName) has been trending in a positive direction over your last \(trend.sessionCount) sessions."
+                message: "Improving trend detected at \(loc): your \(trend.fieldName) has been trending in a positive direction over your last \(trend.sessionCount) sessions."
             ))
         }
 
         for trend in plateaus {
+            let loc = trend.vehicleName.isEmpty ? trend.trackName : "\(trend.trackName) in \(trend.vehicleName)"
             results.append(AIInsight(
                 priority: priorityTrendPlateau,
-                message: "Plateau detected at \(trend.trackName): your \(trend.fieldName) has remained stable over your last \(trend.sessionCount) sessions. You may have reached your current setup ceiling."
+                message: "Plateau detected at \(loc): your \(trend.fieldName) has remained stable over your last \(trend.sessionCount) sessions. You may have reached your current setup ceiling."
             ))
         }
 
