@@ -12,6 +12,11 @@ struct DashboardView: View {
     private var sessions: [Session]
 
     @AppStorage("dashboardTipDismissed") private var tipDismissed: Bool = false
+    @AppStorage("driverFirstName") private var firstName: String = ""
+    @AppStorage("driverTeamName") private var teamName: String = ""
+    @AppStorage("driverRacingNumber") private var racingNumber: String = ""
+
+    @State private var greeting: String = ""
 
     var body: some View {
         NavigationStack {
@@ -34,6 +39,14 @@ struct DashboardView: View {
                 }
             }
             .navigationBarHidden(true)
+            .onAppear {
+                let profile = DashboardMessages.DriverProfile(
+                    firstName: firstName,
+                    teamName: teamName,
+                    racingNumber: racingNumber
+                )
+                greeting = DashboardMessages.generate(sessions: sessions, profile: profile)
+            }
         }
     }
 
@@ -73,7 +86,7 @@ struct DashboardView: View {
                     .font(.system(size: 12, weight: .bold))
                     .tracking(2)
                     .foregroundColor(Theme.textSecondary)
-                Text("GLADIATOR")
+                Text(greeting.isEmpty ? "GLADIATOR" : greeting)
                     .font(.system(size: 28, weight: .heavy))
                     .tracking(1)
                     .foregroundColor(Theme.textPrimary)

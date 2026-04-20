@@ -9,16 +9,20 @@ import SwiftData
 @Observable
 final class AnalyticsFilterState {
     var selectedTracks: Set<String> = []
+    var selectedVehicles: Set<String> = []
     var startDate: Date?
     var endDate: Date?
 
     var isActive: Bool {
-        !selectedTracks.isEmpty || startDate != nil || endDate != nil
+        !selectedTracks.isEmpty || !selectedVehicles.isEmpty || startDate != nil || endDate != nil
     }
 
     func apply(to sessions: [Session]) -> [Session] {
         sessions.filter { session in
             if !selectedTracks.isEmpty, !selectedTracks.contains(session.trackName) {
+                return false
+            }
+            if !selectedVehicles.isEmpty, !selectedVehicles.contains(session.vehicleName) {
                 return false
             }
             if let start = startDate, session.date < start {
@@ -33,6 +37,7 @@ final class AnalyticsFilterState {
 
     func reset() {
         selectedTracks.removeAll()
+        selectedVehicles.removeAll()
         startDate = nil
         endDate = nil
     }
@@ -63,9 +68,12 @@ struct FilterSheetView: View {
     @Bindable var filter: AnalyticsFilterState
     @Query(sort: [SortDescriptor(\Track.name)])
     private var tracks: [Track]
+    @Query(sort: [SortDescriptor(\Vehicle.name)])
+    private var vehicles: [Vehicle]
     @Environment(\.dismiss) private var dismiss
 
     @State private var localTracks: Set<String> = []
+    @State private var localVehicles: Set<String> = []
     @State private var localStartDate: Date = Calendar.current.date(byAdding: .year, value: -1, to: .now) ?? .now
     @State private var localEndDate: Date = .now
     @State private var dateFilterEnabled: Bool = false
@@ -89,6 +97,7 @@ struct FilterSheetView: View {
         ToolbarItem(placement: .cancellationAction) {
             Button("Reset") {
                 localTracks.removeAll()
+                localVehicles.removeAll()
                 dateFilterEnabled = false
             }
             .font(.system(size: 15, weight: .heavy))
@@ -105,6 +114,7 @@ struct FilterSheetView: View {
         ScrollView {
             VStack(spacing: 20) {
                 trackSection
+                vehicleSection
                 dateSection
             }
             .padding(20)
@@ -176,6 +186,71 @@ struct FilterSheetView: View {
         }
     }
 
+    private var vehicleSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("VEHICLES")
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.8)
+                .foregroundColor(Theme.accent)
+                .padding(.leading, 4)
+
+            if vehicles.isEmpty {
+                Text("No vehicles saved")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Theme.textTertiary)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface)
+                    )
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(vehicles.enumerated()), id: \.element.id) { index, vehicle in
+                        Button {
+                            if localVehicles.contains(vehicle.name) {
+                                localVehicles.remove(vehicle.name)
+                            } else {
+                                localVehicles.insert(vehicle.name)
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                let selected = localVehicles.contains(vehicle.name)
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .stroke(selected ? Theme.accent : Theme.textTertiary, lineWidth: 1.5)
+                                        .frame(width: 20, height: 20)
+                                    if selected {
+                                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                            .fill(Theme.accent)
+                                            .frame(width: 20, height: 20)
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(Theme.background)
+                                    }
+                                }
+                                Text(vehicle.name)
+                                    .font(.system(size: 15, weight: .heavy))
+                                    .foregroundColor(Theme.textPrimary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        if index < vehicles.count - 1 {
+                            Divider().background(Theme.hairline).padding(.leading, 46)
+                        }
+                    }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface)
+                )
+            }
+        }
+    }
+
     private var dateSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -233,6 +308,7 @@ struct FilterSheetView: View {
 
     private func loadState() {
         localTracks = filter.selectedTracks
+        localVehicles = filter.selectedVehicles
         if let start = filter.startDate {
             localStartDate = start
             dateFilterEnabled = true
@@ -245,6 +321,7 @@ struct FilterSheetView: View {
 
     private func applyAndDismiss() {
         filter.selectedTracks = localTracks
+        filter.selectedVehicles = localVehicles
         if dateFilterEnabled {
             filter.startDate = localStartDate
             filter.endDate = localEndDate

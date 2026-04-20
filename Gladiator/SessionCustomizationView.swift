@@ -28,6 +28,15 @@ struct SessionCustomizationView: View {
                 }
                 .listRowBackground(Theme.surface)
                 .listRowSeparatorTint(Theme.hairline)
+
+                NavigationLink(destination: VehicleView()) {
+                    Text("Vehicles")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundColor(Theme.textPrimary)
+                        .padding(.vertical, 4)
+                }
+                .listRowBackground(Theme.surface)
+                .listRowSeparatorTint(Theme.hairline)
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)

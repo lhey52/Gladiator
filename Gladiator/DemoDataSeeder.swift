@@ -8,9 +8,10 @@ import SwiftData
 
 enum DemoDataSeeder {
 
-    // MARK: - Demo tracks
+    // MARK: - Demo tracks & vehicles
 
     private static let demoTracks = ["Track1", "Track2", "Track3"]
+    private static let demoVehicles = ["Vehicle1"]
 
     // MARK: - Demo metrics
 
@@ -40,6 +41,7 @@ enum DemoDataSeeder {
 
     static func seed(into context: ModelContext) {
         seedTracks(into: context)
+        seedVehicles(into: context)
         seedMetrics(into: context)
         seedSessions(into: context)
     }
@@ -49,6 +51,14 @@ enum DemoDataSeeder {
         let existingNames = Set(existing.map(\.name))
         for name in demoTracks where !existingNames.contains(name) {
             context.insert(Track(name: name))
+        }
+    }
+
+    private static func seedVehicles(into context: ModelContext) {
+        let existing = (try? context.fetch(FetchDescriptor<Vehicle>())) ?? []
+        let existingNames = Set(existing.map(\.name))
+        for name in demoVehicles where !existingNames.contains(name) {
+            context.insert(Vehicle(name: name))
         }
     }
 
@@ -70,6 +80,7 @@ enum DemoDataSeeder {
             let session = Session(
                 date: date,
                 trackName: demo.trackName,
+                vehicleName: "Vehicle1",
                 sessionType: .practice,
                 notes: ""
             )

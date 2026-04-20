@@ -115,6 +115,7 @@ final class IAPManager: ObservableObject {
     static let sessionLimit = 10
     static let metricLimit = 12
     static let trackLimit = 3
+    static let vehicleLimit = 3
 
     func checkSessionLimit(currentCount: Int) -> Bool {
         isProUser || currentCount < Self.sessionLimit
@@ -138,6 +139,14 @@ final class IAPManager: ObservableObject {
 
     func isAtTrackLimit(currentCount: Int) -> Bool {
         !isProUser && currentCount >= Self.trackLimit
+    }
+
+    func checkVehicleLimit(currentCount: Int) -> Bool {
+        isProUser || currentCount < Self.vehicleLimit
+    }
+
+    func isAtVehicleLimit(currentCount: Int) -> Bool {
+        !isProUser && currentCount >= Self.vehicleLimit
     }
 
     // MARK: - Private

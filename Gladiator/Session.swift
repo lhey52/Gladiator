@@ -34,6 +34,7 @@ enum SessionType: String, CaseIterable, Codable, Identifiable {
 final class Session {
     var date: Date
     var trackName: String
+    var vehicleName: String
     var sessionTypeRaw: String
     var notes: String
     var createdAt: Date
@@ -43,11 +44,13 @@ final class Session {
     init(
         date: Date = .now,
         trackName: String = "",
+        vehicleName: String = "",
         sessionType: SessionType = .practice,
         notes: String = ""
     ) {
         self.date = date
         self.trackName = trackName
+        self.vehicleName = vehicleName
         self.sessionTypeRaw = sessionType.rawValue
         self.notes = notes
         self.createdAt = .now

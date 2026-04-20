@@ -10,6 +10,15 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                NavigationLink(destination: DriverProfileView()) {
+                    Text("Driver Profile")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundColor(Theme.textPrimary)
+                        .padding(.vertical, 4)
+                }
+                .listRowBackground(Theme.surface)
+                .listRowSeparatorTint(Theme.hairline)
+
                 NavigationLink(destination: SessionCustomizationView()) {
                     Text("Session Customization")
                         .font(.system(size: 15, weight: .heavy))
@@ -38,7 +47,7 @@ struct SettingsView: View {
                 .listRowSeparatorTint(Theme.hairline)
 
                 NavigationLink(destination: TrackCodeView()) {
-                    Text("Track Code")
+                    Text("Racetrack Code")
                         .font(.system(size: 15, weight: .heavy))
                         .foregroundColor(Theme.textPrimary)
                         .padding(.vertical, 4)

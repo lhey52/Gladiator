@@ -19,10 +19,13 @@ struct AddSessionView: View {
     private var customFields: [CustomField]
     @Query(sort: [SortDescriptor(\Track.name)])
     private var tracks: [Track]
+    @Query(sort: [SortDescriptor(\Vehicle.name)])
+    private var vehicles: [Vehicle]
 
     @AppStorage("sessionFormTipDismissed") private var tipDismissed: Bool = false
     @State private var date: Date = .now
     @State private var trackName: String = ""
+    @State private var vehicleName: String = ""
     @State private var didLoadDefault: Bool = false
     @State private var sessionType: SessionType = .practice
     @State private var notes: String = ""
@@ -61,6 +64,9 @@ struct AddSessionView: View {
             if let defaultTrack = tracks.first(where: { $0.isDefault }) {
                 trackName = defaultTrack.name
             }
+            if let defaultVehicle = vehicles.first(where: { $0.isDefault }) {
+                vehicleName = defaultVehicle.name
+            }
         }
     }
 
@@ -71,6 +77,7 @@ struct AddSessionView: View {
                     sessionFormTip
                 }
                 trackCard
+                vehicleCard
                 dateCard
                 typeCard
                 customFieldCards
@@ -120,6 +127,22 @@ struct AddSessionView: View {
                 .font(.system(size: 15, weight: .heavy))
                 .foregroundColor(canSave ? Theme.accent : Theme.textTertiary)
                 .disabled(!canSave)
+        }
+    }
+
+    private var vehicleCard: some View {
+        fieldCard(label: "VEHICLE") {
+            Picker("", selection: $vehicleName) {
+                Text("Select Vehicle")
+                    .foregroundColor(Theme.textTertiary)
+                    .tag("")
+                ForEach(vehicles) { vehicle in
+                    Text(vehicle.name).tag(vehicle.name)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Theme.accent)
+            .font(.system(size: 18, weight: .heavy))
         }
     }
 
@@ -211,6 +234,7 @@ struct AddSessionView: View {
         let session = Session(
             date: date,
             trackName: trackName.trimmingCharacters(in: .whitespaces),
+            vehicleName: vehicleName.trimmingCharacters(in: .whitespaces),
             sessionType: sessionType,
             notes: notes
         )

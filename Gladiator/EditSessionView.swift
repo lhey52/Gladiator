@@ -19,12 +19,15 @@ struct EditSessionView: View {
     private var customFields: [CustomField]
     @Query(sort: [SortDescriptor(\Track.name)])
     private var tracks: [Track]
+    @Query(sort: [SortDescriptor(\Vehicle.name)])
+    private var vehicles: [Vehicle]
 
     let session: Session
 
     @AppStorage("sessionFormTipDismissed") private var tipDismissed: Bool = false
     @State private var date: Date = .now
     @State private var trackName: String = ""
+    @State private var vehicleName: String = ""
     @State private var sessionType: SessionType = .practice
     @State private var notes: String = ""
     @State private var fieldEntries: [String: String] = [:]
@@ -66,6 +69,7 @@ struct EditSessionView: View {
                     sessionFormTip
                 }
                 trackCard
+                vehicleCard
                 dateCard
                 typeCard
                 customFieldCards
@@ -126,6 +130,22 @@ struct EditSessionView: View {
                     .tag("")
                 ForEach(tracks) { track in
                     Text(track.name).tag(track.name)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Theme.accent)
+            .font(.system(size: 18, weight: .heavy))
+        }
+    }
+
+    private var vehicleCard: some View {
+        fieldCard(label: "VEHICLE") {
+            Picker("", selection: $vehicleName) {
+                Text("Select Vehicle")
+                    .foregroundColor(Theme.textTertiary)
+                    .tag("")
+                ForEach(vehicles) { vehicle in
+                    Text(vehicle.name).tag(vehicle.name)
                 }
             }
             .pickerStyle(.menu)
@@ -205,6 +225,7 @@ struct EditSessionView: View {
     private func loadSession() {
         date = session.date
         trackName = session.trackName
+        vehicleName = session.vehicleName
         sessionType = session.sessionType
         notes = session.notes
         for fv in session.fieldValues {
@@ -215,6 +236,7 @@ struct EditSessionView: View {
     private func save() {
         session.date = date
         session.trackName = trackName.trimmingCharacters(in: .whitespaces)
+        session.vehicleName = vehicleName.trimmingCharacters(in: .whitespaces)
         session.sessionType = sessionType
         session.notes = notes
 
