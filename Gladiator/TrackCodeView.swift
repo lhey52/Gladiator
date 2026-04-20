@@ -4,14 +4,18 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct TrackCodeView: View {
+    @Environment(\.modelContext) private var modelContext
     @ObservedObject private var iap = IAPManager.shared
     @AppStorage("activeTrackCode") private var activeCode: String = ""
 
     @State private var inputCode: String = ""
     @State private var statusMessage: String = ""
     @State private var statusIsError: Bool = false
+    @State private var showToast: Bool = false
+    @State private var toastText: String = ""
     @FocusState private var inputFocused: Bool
 
     private var hasActiveCode: Bool {
@@ -37,7 +41,18 @@ struct TrackCodeView: View {
                 .padding(20)
                 .padding(.top, 4)
             }
+
+            if showToast {
+                VStack {
+                    Spacer()
+                    ToastView(icon: "checkmark.circle.fill", text: toastText)
+                        .transition(.opacity)
+                        .padding(.bottom, 16)
+                }
+                .allowsHitTesting(false)
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: showToast)
         .navigationTitle("Track Code")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -177,6 +192,18 @@ struct TrackCodeView: View {
         switch action {
         case .grantPro:
             iap.codeGrantedPro = true
+        case .seedDemoData:
+            DemoDataSeeder.seed(into: modelContext)
+            showToastBriefly("Demo data loaded successfully")
+        }
+    }
+
+    private func showToastBriefly(_ text: String) {
+        toastText = text
+        showToast = true
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            showToast = false
         }
     }
 }

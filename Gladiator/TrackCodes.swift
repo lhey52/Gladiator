@@ -7,6 +7,7 @@ import Foundation
 
 enum TrackCodeAction {
     case grantPro
+    case seedDemoData
 }
 
 struct TrackCodeEntry {
@@ -24,6 +25,12 @@ enum TrackCodes {
         TrackCodeEntry(
             code: "VIPACCESS",
             action: .grantPro,
+            expiryDate: makeDate(year: 2026, month: 7, day: 1),
+            isActive: true
+        ),
+        TrackCodeEntry(
+            code: "GLADIATORDEMO",
+            action: .seedDemoData,
             expiryDate: makeDate(year: 2026, month: 7, day: 1),
             isActive: true
         )
