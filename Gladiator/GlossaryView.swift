@@ -90,16 +90,25 @@ var body: some View {
                 ForEach(groupedResults, id: \.letter) { group in
                     sectionHeader(group.letter)
 
-                    ForEach(group.terms) { term in
-                        NavigationLink {
-                            GlossaryDetailView(term: term)
-                        } label: {
-                            termRow(term)
+                    VStack(spacing: 0) {
+                        ForEach(Array(group.terms.enumerated()), id: \.element.id) { index, term in
+                            NavigationLink {
+                                GlossaryDetailView(term: term)
+                            } label: {
+                                termRow(term)
+                            }
+                            .buttonStyle(.plain)
+
+                            if index < group.terms.count - 1 {
+                                Divider()
+                                    .background(Theme.hairline)
+                                    .padding(.leading, 14)
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
                     }
+                    .background(Theme.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(.horizontal, 20)
                 }
 
                 Color.clear.frame(height: 20)
@@ -154,14 +163,8 @@ var body: some View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(Theme.textTertiary)
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 }
 

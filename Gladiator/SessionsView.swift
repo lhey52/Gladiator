@@ -14,6 +14,13 @@ struct SessionsView: View {
     @State private var searchText: String = ""
     @State private var typeFilter: SessionType? = nil
     @State private var showingAdd: Bool = false
+    @State private var isEditing: Bool = false
+    @State private var selectedIDs: Set<PersistentIdentifier> = []
+    @State private var showingDeleteConfirm: Bool = false
+    @State private var sessionCountBeforeSheet: Int = 0
+    @State private var toastIcon: String = ""
+    @State private var toastText: String = ""
+    @State private var showToast: Bool = false
     @FocusState private var searchFocused: Bool
 
     private var filteredSessions: [Session] {
@@ -39,22 +46,84 @@ struct SessionsView: View {
                     filterBar
                     content
                 }
+
+                if showToast {
+                    VStack {
+                        Spacer()
+                        ToastView(icon: toastIcon, text: toastText)
+                            .transition(.opacity)
+                            .padding(.bottom, 16)
+                    }
+                    .allowsHitTesting(false)
+                }
             }
+            .animation(.easeInOut(duration: 0.25), value: showToast)
             .navigationTitle("Sessions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button {
-                        showingAdd = true
+                        if isEditing {
+                            isEditing = false
+                            selectedIDs.removeAll()
+                        } else {
+                            isEditing = true
+                        }
                     } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 20, weight: .bold))
+                        Text(isEditing ? "Done" : "Edit")
+                            .font(.system(size: 15, weight: .heavy))
                             .foregroundColor(Theme.accent)
                     }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    if isEditing {
+                        Button {
+                            showingDeleteConfirm = true
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(selectedIDs.isEmpty ? Theme.textTertiary : Theme.accent)
+                        }
+                        .disabled(selectedIDs.isEmpty)
+                    } else {
+                        Button {
+                            showingAdd = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(Theme.accent)
+                        }
+                    }
+                }
             }
-            .sheet(isPresented: $showingAdd) {
+            .confirmationDialog(
+                "Delete \(selectedIDs.count) session\(selectedIDs.count == 1 ? "" : "s")?",
+                isPresented: $showingDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    deleteSelected()
+                }
+                Button("Cancel", role: .cancel) { }
+            }
+            .sheet(isPresented: $showingAdd, onDismiss: {
+                if sessions.count > sessionCountBeforeSheet {
+                    showToastBriefly(icon: "checkmark.circle.fill", text: "Session Saved")
+                }
+            }) {
                 AddSessionView()
+            }
+            .onChange(of: showingAdd) {
+                if showingAdd { sessionCountBeforeSheet = sessions.count }
+            }
+            .onChange(of: sessions.count) { oldCount, newCount in
+                if newCount < oldCount, !isEditing {
+                    let deleted = oldCount - newCount
+                    showToastBriefly(
+                        icon: "trash",
+                        text: deleted == 1 ? "Session Deleted" : "\(deleted) Sessions Deleted"
+                    )
+                }
             }
         }
     }
@@ -121,19 +190,90 @@ struct SessionsView: View {
             emptyState
         } else {
             ScrollView {
-                LazyVStack(spacing: 10) {
-                    ForEach(filteredSessions) { session in
-                        NavigationLink {
-                            SessionDetailView(session: session)
-                        } label: {
-                            SessionRow(session: session)
+                VStack(spacing: 0) {
+                    ForEach(Array(filteredSessions.enumerated()), id: \.element.id) { index, session in
+                        if isEditing {
+                            Button {
+                                toggleSelection(session)
+                            } label: {
+                                HStack(spacing: 0) {
+                                    selectionCircle(for: session)
+                                        .padding(.leading, 14)
+                                    SessionRow(session: session)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            NavigationLink {
+                                SessionDetailView(session: session)
+                            } label: {
+                                SessionRow(session: session)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+
+                        if index < filteredSessions.count - 1 {
+                            Divider()
+                                .background(Theme.hairline)
+                                .padding(.leading, isEditing ? 90 : 56)
+                        }
                     }
                 }
+                .background(Theme.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
             }
+        }
+    }
+
+    private func selectionCircle(for session: Session) -> some View {
+        let selected = selectedIDs.contains(session.persistentModelID)
+        return ZStack {
+            Circle()
+                .stroke(selected ? Theme.accent : Theme.textTertiary, lineWidth: 2)
+                .frame(width: 24, height: 24)
+            if selected {
+                Circle()
+                    .fill(Theme.accent)
+                    .frame(width: 24, height: 24)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Theme.background)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: selected)
+    }
+
+    private func toggleSelection(_ session: Session) {
+        let id = session.persistentModelID
+        if selectedIDs.contains(id) {
+            selectedIDs.remove(id)
+        } else {
+            selectedIDs.insert(id)
+        }
+    }
+
+    private func deleteSelected() {
+        let count = selectedIDs.count
+        for session in sessions where selectedIDs.contains(session.persistentModelID) {
+            modelContext.delete(session)
+        }
+        selectedIDs.removeAll()
+        isEditing = false
+        showToastBriefly(
+            icon: "trash",
+            text: count == 1 ? "Session Deleted" : "\(count) Sessions Deleted"
+        )
+    }
+
+    private func showToastBriefly(icon: String, text: String) {
+        toastIcon = icon
+        toastText = text
+        showToast = true
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            showToast = false
         }
     }
 
@@ -188,40 +328,41 @@ private struct SessionRow: View {
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "MMM dd"
+        f.dateFormat = "MMM dd, yyyy"
         return f
     }()
 
-    var body: some View {
-        HStack(spacing: 14) {
-            VStack(spacing: 2) {
-                Text(Self.dateFormatter.string(from: session.date).uppercased())
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(1)
-                    .foregroundColor(Theme.accent)
-            }
-            .frame(width: 52)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Theme.accent.opacity(0.12))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
-            )
+    private var accentBarColor: Color {
+        switch session.sessionType {
+        case .race: return Theme.accent
+        case .qualifying: return Theme.accent.opacity(0.65)
+        case .practice: return Theme.accent.opacity(0.35)
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 4) {
+    var body: some View {
+        HStack(spacing: 0) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(accentBarColor)
+                .frame(width: 3, height: 32)
+                .padding(.leading, 14)
+                .padding(.trailing, 12)
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(session.trackName.isEmpty ? "Untitled Track" : session.trackName)
-                    .font(.system(size: 16, weight: .heavy))
+                    .font(.system(size: 15, weight: .heavy))
                     .foregroundColor(Theme.textPrimary)
                     .lineLimit(1)
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: session.sessionType.systemImage)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 9, weight: .bold))
                     Text(session.sessionType.rawValue.uppercased())
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(1.2)
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(1)
+                    Text("·")
+                    Text(Self.dateFormatter.string(from: session.date).uppercased())
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.8)
                 }
                 .foregroundColor(Theme.textSecondary)
             }
@@ -229,18 +370,12 @@ private struct SessionRow: View {
             Spacer()
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(Theme.textTertiary)
+                .padding(.trailing, 14)
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 }
 

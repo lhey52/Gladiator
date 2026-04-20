@@ -14,6 +14,7 @@ struct SessionDetailView: View {
 
     @State private var showingDeleteConfirm: Bool = false
     @State private var showingEdit: Bool = false
+    @State private var showSavedToast: Bool = false
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -39,7 +40,18 @@ struct SessionDetailView: View {
                 }
                 .padding(20)
             }
+
+            if showSavedToast {
+                VStack {
+                    Spacer()
+                    ToastView(icon: "checkmark.circle.fill", text: "Session Saved")
+                        .transition(.opacity)
+                        .padding(.bottom, 16)
+                }
+                .allowsHitTesting(false)
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: showSavedToast)
         .navigationTitle("Session")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -60,7 +72,13 @@ struct SessionDetailView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingEdit) {
+        .sheet(isPresented: $showingEdit, onDismiss: {
+            showSavedToast = true
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                showSavedToast = false
+            }
+        }) {
             EditSessionView(session: session)
         }
         .confirmationDialog(

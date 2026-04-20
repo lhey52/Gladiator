@@ -18,6 +18,7 @@ struct AddSessionView: View {
     @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
     private var customFields: [CustomField]
 
+    @AppStorage("sessionFormTipDismissed") private var tipDismissed: Bool = false
     @State private var date: Date = .now
     @State private var trackName: String = ""
     @State private var sessionType: SessionType = .practice
@@ -56,6 +57,9 @@ struct AddSessionView: View {
     private var formScroll: some View {
         ScrollView {
             VStack(spacing: 18) {
+                if !tipDismissed {
+                    sessionFormTip
+                }
                 trackCard
                 dateCard
                 typeCard
@@ -64,6 +68,35 @@ struct AddSessionView: View {
             }
             .padding(20)
         }
+    }
+
+    private var sessionFormTip: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Theme.accent)
+            Text("Customize your fields and metrics in Settings")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+            Spacer()
+            Button { tipDismissed = true } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Theme.textTertiary)
+                    .frame(width: 24, height: 24)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
+        )
+        .shadow(color: Theme.accent.opacity(0.12), radius: 10, y: 4)
     }
 
     @ToolbarContentBuilder

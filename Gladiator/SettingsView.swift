@@ -11,7 +11,7 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 NavigationLink(destination: CustomFieldsView()) {
-                    Text("Session Metrics")
+                    Text("Session Customization")
                         .font(.system(size: 15, weight: .heavy))
                         .foregroundColor(Theme.textPrimary)
                         .padding(.vertical, 4)
@@ -21,6 +21,15 @@ struct SettingsView: View {
 
                 NavigationLink(destination: GlossaryView()) {
                     Text("Glossary")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundColor(Theme.textPrimary)
+                        .padding(.vertical, 4)
+                }
+                .listRowBackground(Theme.surface)
+                .listRowSeparatorTint(Theme.hairline)
+
+                NavigationLink(destination: ResetView()) {
+                    Text("Reset")
                         .font(.system(size: 15, weight: .heavy))
                         .foregroundColor(Theme.textPrimary)
                         .padding(.vertical, 4)
