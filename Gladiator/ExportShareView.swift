@@ -22,6 +22,8 @@ struct ExportShareView: View {
     @State private var showingShareSheet: Bool = false
     @State private var exportErrorMessage: String?
     @State private var showingExportError: Bool = false
+    @State private var showingPreShareAlert: Bool = false
+    @State private var showingTutorial: Bool = false
 
     var body: some View {
         ZStack {
@@ -49,23 +51,35 @@ struct ExportShareView: View {
                 }
 
                 if iap.isProUser {
-                    Button {
-                        startExport()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "arrow.up.doc.fill")
-                                .font(.system(size: 14, weight: .bold))
+                    VStack(spacing: 10) {
+                        Button {
+                            showingPreShareAlert = true
+                        } label: {
                             Text("Share Data with Another Gladiator App")
                                 .font(.system(size: 14, weight: .heavy))
+                                .foregroundColor(Theme.background)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(Theme.accent)
+                                )
+                                .shadow(color: Theme.accent.opacity(0.4), radius: 12)
                         }
-                        .foregroundColor(Theme.background)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Theme.accent)
-                        )
-                        .shadow(color: Theme.accent.opacity(0.4), radius: 12)
+
+                        Button {
+                            showingTutorial = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "questionmark.circle")
+                                    .font(.system(size: 12, weight: .bold))
+                                Text("HOW TO SHARE & IMPORT")
+                                    .font(.system(size: 11, weight: .heavy))
+                                    .tracking(1.5)
+                            }
+                            .foregroundColor(Theme.accent)
+                            .padding(.vertical, 6)
+                        }
                     }
                     .padding(.horizontal, 32)
                 } else {
@@ -112,6 +126,15 @@ struct ExportShareView: View {
             if let url = exportURL {
                 ActivityView(items: [url])
             }
+        }
+        .sheet(isPresented: $showingTutorial) {
+            TutorialView()
+        }
+        .alert("Before You Share", isPresented: $showingPreShareAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Continue") { startExport() }
+        } message: {
+            Text("Note: Sharing via iMessage may not work reliably. We recommend sharing via Email or AirDrop for best results.")
         }
         .alert("Export Failed", isPresented: $showingExportError) {
             Button("OK", role: .cancel) { }
