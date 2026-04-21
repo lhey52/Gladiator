@@ -105,6 +105,16 @@ struct AnalyticsView: View {
             }
             .navigationTitle("Analytics")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        Text("Analytics")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(Theme.textPrimary)
+                        ProBadgeIfNeeded()
+                    }
+                }
+            }
             .fullScreenCover(isPresented: $showingPaywall) {
                 PaywallView()
             }

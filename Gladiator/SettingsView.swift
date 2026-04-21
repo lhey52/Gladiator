@@ -79,6 +79,16 @@ struct SettingsView: View {
             .tint(Theme.accent)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        Text("Settings")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(Theme.textPrimary)
+                        ProBadgeIfNeeded()
+                    }
+                }
+            }
         }
     }
 }

@@ -66,6 +66,14 @@ struct SessionsView: View {
             .navigationTitle("Sessions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        Text("Sessions")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(Theme.textPrimary)
+                        ProBadgeIfNeeded()
+                    }
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
                         if isEditing {

@@ -16,6 +16,8 @@ struct CorrelationMatrixView: View {
     @State private var filter = AnalyticsFilterState()
     @State private var showingFilter: Bool = false
     @State private var selectedPair: MatrixPairSelection?
+    @State private var showingPaywall: Bool = false
+    @ObservedObject private var iap = IAPManager.shared
 
     private let cellSize: CGFloat = 64
     private let rowHeaderWidth: CGFloat = 108
@@ -48,7 +50,7 @@ struct CorrelationMatrixView: View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
-                mainContent
+                lockedContent
             }
             .navigationTitle("Correlation Matrix")
             .navigationBarTitleDisplayMode(.inline)
@@ -76,8 +78,43 @@ struct CorrelationMatrixView: View {
                     sessions: filteredSessions
                 )
             }
+            .fullScreenCover(isPresented: $showingPaywall) {
+                PaywallView()
+            }
         }
         .preferredColorScheme(.dark)
+    }
+
+    private var lockedContent: some View {
+        ZStack {
+            mainContent
+                .blur(radius: iap.isProUser ? 0 : 6)
+                .allowsHitTesting(iap.isProUser)
+
+            if !iap.isProUser {
+                unlockOverlay
+            }
+        }
+    }
+
+    private var unlockOverlay: some View {
+        Button { showingPaywall = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 14, weight: .bold))
+                Text("UNLOCK PRO")
+                    .font(.system(size: 13, weight: .heavy))
+                    .tracking(1.5)
+            }
+            .foregroundColor(Theme.accent)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Capsule().fill(Theme.surface))
+            .overlay(Capsule().stroke(Theme.accent.opacity(0.5), lineWidth: 1))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Main content

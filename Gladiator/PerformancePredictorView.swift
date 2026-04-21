@@ -20,6 +20,8 @@ struct PerformancePredictorView: View {
     @State private var showingOutcomePicker: Bool = false
     @State private var showingAddPredictor: Bool = false
     @State private var result: PredictiveAnalysisOutcome?
+    @State private var showingPaywall: Bool = false
+    @ObservedObject private var iap = IAPManager.shared
 
     private var plottableFields: [CustomField] {
         allFields.filter { $0.fieldType.isPlottable }
@@ -50,7 +52,7 @@ struct PerformancePredictorView: View {
             ZStack {
                 Theme.background.ignoresSafeArea()
                     .dismissKeyboardOnTap()
-                mainContent
+                lockedContent
             }
             .navigationTitle("Performance Predictor")
             .navigationBarTitleDisplayMode(.inline)
@@ -89,8 +91,43 @@ struct PerformancePredictorView: View {
                     addPredictor(name)
                 }
             }
+            .fullScreenCover(isPresented: $showingPaywall) {
+                PaywallView()
+            }
         }
         .preferredColorScheme(.dark)
+    }
+
+    private var lockedContent: some View {
+        ZStack {
+            mainContent
+                .blur(radius: iap.isProUser ? 0 : 6)
+                .allowsHitTesting(iap.isProUser)
+
+            if !iap.isProUser {
+                unlockOverlay
+            }
+        }
+    }
+
+    private var unlockOverlay: some View {
+        Button { showingPaywall = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 14, weight: .bold))
+                Text("UNLOCK PRO")
+                    .font(.system(size: 13, weight: .heavy))
+                    .tracking(1.5)
+            }
+            .foregroundColor(Theme.accent)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Capsule().fill(Theme.surface))
+            .overlay(Capsule().stroke(Theme.accent.opacity(0.5), lineWidth: 1))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Main content

@@ -14,6 +14,7 @@ struct DashboardView: View {
     private var sessions: [Session]
 
     @AppStorage("dashboardTipDismissed") private var tipDismissed: Bool = false
+    @AppStorage("dashboardDeviceTipDismissed") private var deviceTipDismissed: Bool = false
     @AppStorage("driverFirstName") private var firstName: String = ""
     @AppStorage("driverTeamName") private var teamName: String = ""
     @AppStorage("driverRacingNumber") private var racingNumber: String = ""
@@ -28,6 +29,9 @@ struct DashboardView: View {
                     VStack(spacing: 20) {
                         if sessions.isEmpty, !tipDismissed {
                             dashboardTip
+                        }
+                        if !deviceTipDismissed {
+                            deviceTip
                         }
                         header
                         SummarySection(sessions: sessions)
@@ -81,13 +85,52 @@ struct DashboardView: View {
         .shadow(color: Theme.accent.opacity(0.12), radius: 10, y: 4)
     }
 
+    private var deviceTip: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Theme.accent)
+            Text(deviceTipMessage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+            Spacer()
+            Button { deviceTipDismissed = true } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Theme.textTertiary)
+                    .frame(width: 24, height: 24)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
+        )
+        .shadow(color: Theme.accent.opacity(0.12), radius: 10, y: 4)
+    }
+
+    private var deviceTipMessage: String {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            return "Gladiator also works on iPhone."
+        }
+        return "Gladiator also works on iPad."
+    }
+
     private var header: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("DASHBOARD")
-                    .font(.system(size: 12, weight: .bold))
-                    .tracking(2)
-                    .foregroundColor(Theme.textSecondary)
+                HStack(spacing: 8) {
+                    Text("DASHBOARD")
+                        .font(.system(size: 12, weight: .bold))
+                        .tracking(2)
+                        .foregroundColor(Theme.textSecondary)
+                    ProBadgeIfNeeded()
+                }
                 Text(greeting.isEmpty ? "GLADIATOR" : greeting)
                     .font(.system(size: 28, weight: .heavy))
                     .tracking(1)

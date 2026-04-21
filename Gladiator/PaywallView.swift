@@ -107,12 +107,11 @@ struct PaywallView: View {
 
     private var featuresSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            featureRow("sparkles", "AI Insights")
-            featureRow("function", "Correlation Analysis")
-            featureRow("square.and.arrow.up", "Data Export")
-            featureRow("infinity", "Session limits removed")
-            featureRow("slider.horizontal.3", "Metrics limits removed")
-            featureRow("mappin.and.ellipse", "Track limits removed")
+            featureRow("sparkles", "AI Insights & Recommendations")
+            featureRow("function", "Correlation Analysis & Other Pro Analytics Tools")
+            featureRow("square.and.arrow.up", "Export & Share Data with Other Drivers")
+            featureRow("infinity", "Unlimited Data Storage")
+            featureRow("clock.badge.checkmark", "7-Day Free Trial — Cancel Anytime")
         }
         .padding(20)
         .background(
