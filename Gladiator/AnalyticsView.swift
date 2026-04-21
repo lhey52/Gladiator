@@ -90,6 +90,14 @@ struct AnalyticsView: View {
                         ) {
                             PersonalBestsView()
                         }
+
+                        AnalyticsCard(
+                            icon: "target",
+                            title: "Performance Predictor",
+                            description: "Discover which setup combinations best predict your performance"
+                        ) {
+                            PerformancePredictorView()
+                        }
                     }
                     .padding(20)
                     .padding(.top, 4)

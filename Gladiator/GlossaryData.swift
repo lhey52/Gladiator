@@ -112,6 +112,29 @@ enum GlossaryData {
             seeAlso: ["Correlation", "Custom Metric"]
         ),
         GlossaryTerm(
+            id: "performance-predictor",
+            name: "Performance Predictor",
+            definition: "A tool that builds a predictive model from your session data. You choose one outcome metric (what you want to predict) and up to five predictor metrics (what might influence it). The model estimates how much of the variation in the outcome can be explained by the predictors together, and ranks each predictor by its relative importance.",
+            children: [
+                GlossaryChild(
+                    id: "r-squared",
+                    name: "R-Squared (Predictive Power)",
+                    definition: "A value between 0 and 1 (shown as a percentage) that measures how well the selected predictors, taken together, explain variation in the outcome. A higher value means a stronger predictive relationship. 0% means the predictors explain none of the variation; 100% means they explain all of it."
+                ),
+                GlossaryChild(
+                    id: "multiple-linear-regression",
+                    name: "Multiple Linear Regression",
+                    definition: "The statistical method used to fit the predictive model. It finds the combination of predictor weights that best matches the outcome across all analyzed sessions, using ordinary least squares."
+                ),
+                GlossaryChild(
+                    id: "predictor-contribution",
+                    name: "Predictor Contribution",
+                    definition: "Each predictor's share of the model's total importance, expressed as a percentage. Contributions are derived from standardized regression coefficients so metrics on different scales (for example tire pressure in PSI vs lap time in seconds) can be compared fairly."
+                )
+            ],
+            seeAlso: ["Correlation", "Correlation Matrix", "Standard Deviation"]
+        ),
+        GlossaryTerm(
             id: "standard-deviation",
             name: "Standard Deviation",
             definition: "A measure of how spread out your values are from the average. A low standard deviation means your results are consistent and clustered near the mean. A high standard deviation means there is more variation between sessions. It is commonly used to evaluate consistency in performance.",
