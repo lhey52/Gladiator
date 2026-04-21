@@ -17,8 +17,11 @@ struct DashboardView: View {
     @AppStorage("driverFirstName") private var firstName: String = ""
     @AppStorage("driverTeamName") private var teamName: String = ""
     @AppStorage("driverRacingNumber") private var racingNumber: String = ""
+    @AppStorage("showNewsTicker") private var showNewsTicker: Bool = true
+    @ObservedObject private var news = NewsService.shared
 
     @State private var greeting: String = ""
+    @State private var showingNews: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -26,6 +29,9 @@ struct DashboardView: View {
                 Theme.background.ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: 20) {
+                        if showNewsTicker, !news.articles.isEmpty {
+                            newsTicker
+                        }
                         if sessions.isEmpty, !tipDismissed {
                             dashboardTip
                         }
@@ -34,6 +40,9 @@ struct DashboardView: View {
                         TypeBreakdownSection(sessions: sessions, onSelectType: onSelectType)
                         ActivityChartSection(sessions: sessions)
                         RecentSessionsSection(sessions: Array(sessions.prefix(5)))
+                        if !news.articles.isEmpty {
+                            latestNewsSection
+                        }
                         Color.clear.frame(height: 8)
                     }
                     .padding(.horizontal, 20)
@@ -48,6 +57,10 @@ struct DashboardView: View {
                     racingNumber: racingNumber
                 )
                 greeting = DashboardMessages.generate(sessions: sessions, profile: profile)
+                Task { await news.refresh() }
+            }
+            .fullScreenCover(isPresented: $showingNews) {
+                NewsView()
             }
         }
     }
@@ -79,6 +92,87 @@ struct DashboardView: View {
                 .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
         )
         .shadow(color: Theme.accent.opacity(0.12), radius: 10, y: 4)
+    }
+
+    private var newsTicker: some View {
+        let tickerText = news.articles.prefix(10).map { "\($0.title)  ·  \($0.source)" }.joined(separator: "     ")
+        return NewsTickerView(text: tickerText) { index in
+            let articles = Array(news.articles.prefix(10))
+            guard index < articles.count else { return }
+            UIApplication.shared.open(articles[index].url)
+        }
+    }
+
+    private static let newsDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM dd"
+        return f
+    }()
+
+    private var latestNewsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("LATEST NEWS")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(2)
+                    .foregroundColor(Theme.textSecondary)
+                Spacer()
+                Button { showingNews = true } label: {
+                    HStack(spacing: 4) {
+                        Text("SEE ALL")
+                            .font(.system(size: 11, weight: .bold))
+                            .tracking(1.5)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .foregroundColor(Theme.accent)
+                }
+            }
+            .padding(.horizontal, 4)
+
+            VStack(spacing: 0) {
+                ForEach(Array(news.articles.prefix(5).enumerated()), id: \.element.id) { index, article in
+                    Button {
+                        UIApplication.shared.open(article.url)
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(article.title)
+                                    .font(.system(size: 14, weight: .heavy))
+                                    .foregroundColor(Theme.textPrimary)
+                                    .lineLimit(2)
+                                HStack(spacing: 6) {
+                                    Text(article.source.uppercased())
+                                        .font(.system(size: 10, weight: .bold))
+                                        .tracking(1)
+                                    Text("·")
+                                    Text(Self.newsDateFormatter.string(from: article.date).uppercased())
+                                        .font(.system(size: 10, weight: .bold))
+                                        .tracking(0.8)
+                                }
+                                .foregroundColor(Theme.textSecondary)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(Theme.textTertiary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < min(news.articles.count, 5) - 1 {
+                        Divider()
+                            .background(Theme.hairline)
+                            .padding(.leading, 14)
+                    }
+                }
+            }
+            .background(Theme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
     }
 
     private var header: some View {

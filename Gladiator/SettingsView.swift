@@ -10,6 +10,15 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                NavigationLink(destination: AppearanceView()) {
+                    Text("Appearance")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundColor(Theme.textPrimary)
+                        .padding(.vertical, 4)
+                }
+                .listRowBackground(Theme.surface)
+                .listRowSeparatorTint(Theme.hairline)
+
                 NavigationLink(destination: DriverProfileView()) {
                     Text("Driver Profile")
                         .font(.system(size: 15, weight: .heavy))
