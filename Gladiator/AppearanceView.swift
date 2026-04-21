@@ -7,6 +7,8 @@ import SwiftUI
 
 struct AppearanceView: View {
     @AppStorage("newsFeedEnabled") private var newsEnabled: Bool = true
+    @AppStorage("newsTickerEnabled") private var newsTickerEnabled: Bool = true
+    @AppStorage("newsTickerPreDisableState") private var newsTickerPreDisableState: Bool = true
 
     var body: some View {
         ZStack {
@@ -22,13 +24,30 @@ struct AppearanceView: View {
                 .tint(Theme.accent)
                 .listRowBackground(Theme.surface)
                 .listRowSeparatorTint(Theme.hairline)
+
+                Toggle(isOn: $newsTickerEnabled) {
+                    Text("News Ticker")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundColor(newsEnabled ? Theme.textPrimary : Theme.textTertiary)
+                        .padding(.vertical, 4)
+                }
+                .tint(Theme.accent)
+                .disabled(!newsEnabled)
+                .listRowBackground(Theme.surface)
+                .listRowSeparatorTint(Theme.hairline)
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
         }
         .navigationTitle("Appearance")
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: newsEnabled) { _, _ in
+        .onChange(of: newsEnabled) { _, newValue in
+            if newValue {
+                newsTickerEnabled = newsTickerPreDisableState
+            } else {
+                newsTickerPreDisableState = newsTickerEnabled
+                newsTickerEnabled = false
+            }
             Task { await NewsService.shared.refresh() }
         }
     }

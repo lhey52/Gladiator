@@ -27,6 +27,7 @@ struct DashboardView: View {
                 Theme.background.ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: 20) {
+                        NewsTickerView()
                         if sessions.isEmpty, !tipDismissed {
                             dashboardTip
                         }
