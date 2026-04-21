@@ -13,21 +13,22 @@ struct NewsTickerView: View {
     @State private var textWidth: CGFloat = 0
 
     var body: some View {
-        HStack(spacing: 0) {
-            tickerText
-                .background(
-                    GeometryReader { textGeo in
-                        Color.clear.onAppear {
-                            textWidth = textGeo.size.width
-                            startAnimation()
+        GeometryReader { _ in
+            HStack(spacing: 0) {
+                tickerText
+                    .background(
+                        GeometryReader { textGeo in
+                            Color.clear.onAppear {
+                                textWidth = textGeo.size.width
+                                startAnimation()
+                            }
                         }
-                    }
-                )
-            tickerText
+                    )
+                tickerText
+            }
+            .offset(x: offset)
         }
-        .offset(x: offset)
         .frame(height: 32)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .clipped()
         .background(Theme.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
