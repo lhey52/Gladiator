@@ -38,6 +38,7 @@ struct DashboardView: View {
                         TypeBreakdownSection(sessions: sessions, onSelectType: onSelectType)
                         ActivityChartSection(sessions: sessions)
                         RecentSessionsSection(sessions: Array(sessions.prefix(5)))
+                        LatestNewsSection()
                         Color.clear.frame(height: 8)
                     }
                     .padding(.horizontal, 20)
@@ -52,6 +53,7 @@ struct DashboardView: View {
                     racingNumber: racingNumber
                 )
                 greeting = DashboardMessages.generate(sessions: sessions, profile: profile)
+                Task { await NewsService.shared.refresh() }
             }
         }
     }
@@ -507,6 +509,126 @@ private struct RecentSessionRow: View {
                 .foregroundColor(Theme.textTertiary)
         }
         .padding(16)
+    }
+}
+
+// MARK: - Latest news
+
+private struct LatestNewsSection: View {
+    @AppStorage("newsFeedEnabled") private var newsEnabled: Bool = true
+    @ObservedObject private var service = NewsService.shared
+    @State private var showingAllNews: Bool = false
+    @State private var selectedArticle: NewsArticle?
+
+    private var articles: [NewsArticle] {
+        Array(service.articles.prefix(5))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            header
+            content
+        }
+        .fullScreenCover(isPresented: $showingAllNews) {
+            NewsView()
+        }
+        .sheet(item: $selectedArticle) { article in
+            SafariBrowserView(url: article.url)
+        }
+    }
+
+    private var header: some View {
+        HStack {
+            Text("LATEST NEWS")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(2)
+                .foregroundColor(Theme.textSecondary)
+            Spacer()
+            if newsEnabled, !articles.isEmpty {
+                Button { showingAllNews = true } label: {
+                    HStack(spacing: 4) {
+                        Text("SEE ALL")
+                            .font(.system(size: 11, weight: .bold))
+                            .tracking(1.5)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .foregroundColor(Theme.accent)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if !newsEnabled {
+            disclaimer(icon: "bell.slash", text: "News refresh disabled")
+        } else if !articles.isEmpty {
+            list
+        } else if service.isLoading {
+            loadingCard
+        } else {
+            disclaimer(icon: "wifi.slash", text: "No news available. Check your internet connection.")
+        }
+    }
+
+    private func disclaimer(icon: String, text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(Theme.accent.opacity(0.8))
+            Text(text)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Theme.textSecondary)
+            Spacer()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    private var loadingCard: some View {
+        HStack {
+            Spacer()
+            ProgressView()
+                .tint(Theme.accent)
+            Spacer()
+        }
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    private var list: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(articles.enumerated()), id: \.element.id) { index, article in
+                Button {
+                    selectedArticle = article
+                } label: {
+                    NewsRow(article: article, showsAccentBar: false)
+                }
+                .buttonStyle(.plain)
+                if index < articles.count - 1 {
+                    Divider().background(Theme.hairline).padding(.leading, 14)
+                }
+            }
+        }
+        .background(Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

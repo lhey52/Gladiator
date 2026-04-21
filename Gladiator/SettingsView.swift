@@ -19,6 +19,15 @@ struct SettingsView: View {
                 .listRowBackground(Theme.surface)
                 .listRowSeparatorTint(Theme.hairline)
 
+                NavigationLink(destination: AppearanceView()) {
+                    Text("Appearance")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundColor(Theme.textPrimary)
+                        .padding(.vertical, 4)
+                }
+                .listRowBackground(Theme.surface)
+                .listRowSeparatorTint(Theme.hairline)
+
                 NavigationLink(destination: SessionCustomizationView()) {
                     Text("Session Customization")
                         .font(.system(size: 15, weight: .heavy))
