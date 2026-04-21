@@ -40,6 +40,19 @@ enum GlossaryData {
             seeAlso: ["Scatter Plot", "Trend Analysis"]
         ),
         GlossaryTerm(
+            id: "correlation-matrix",
+            name: "Correlation Matrix",
+            definition: "A grid that shows the Pearson correlation coefficient between every pair of plottable metrics at once. Rows and columns both list your Number and Time metrics, and each cell is color-coded so strong relationships jump out at a glance.",
+            children: [
+                GlossaryChild(
+                    id: "heat-map",
+                    name: "Heat Map",
+                    definition: "A color-coded visualization where each cell's color encodes the strength and direction of a value. In the Correlation Matrix, warm colors (orange) indicate positive relationships, cool colors (blue) indicate negative relationships, and neutral greys indicate weak or no relationship."
+                )
+            ],
+            seeAlso: ["Correlation", "Scatter Plot"]
+        ),
+        GlossaryTerm(
             id: "trend-analysis",
             name: "Trend Analysis",
             definition: "A tool for tracking how a metric changes over time. It plots individual session values chronologically and overlays a smoothed line to reveal the overall direction of change, filtering out noise from session-to-session variation.",

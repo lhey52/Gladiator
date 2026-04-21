@@ -51,6 +51,27 @@ enum BackgroundCorrelationScanner {
         return results
     }
 
+    static func scanPairs(sessions: [Session], fields: [CustomField]) -> [CorrelationPairResult] {
+        let plottable = fields.filter { $0.fieldType.isPlottable }
+        guard plottable.count >= 2 else { return [] }
+
+        var results: [CorrelationPairResult] = []
+        for i in 0..<plottable.count {
+            for j in (i + 1)..<plottable.count {
+                if let result = correlate(
+                    trackName: "",
+                    vehicleName: "",
+                    sessions: sessions,
+                    fieldA: plottable[i].name,
+                    fieldB: plottable[j].name
+                ) {
+                    results.append(result)
+                }
+            }
+        }
+        return results
+    }
+
     private static func correlate(trackName: String, vehicleName: String, sessions: [Session], fieldA: String, fieldB: String) -> CorrelationPairResult? {
         var xs: [Double] = []
         var ys: [Double] = []

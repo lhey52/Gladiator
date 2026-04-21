@@ -60,6 +60,14 @@ struct AnalyticsView: View {
                         }
 
                         AnalyticsCard(
+                            icon: "tablecells",
+                            title: "Correlation Matrix",
+                            description: "Heat map of correlations across all metric pairs"
+                        ) {
+                            CorrelationMatrixView()
+                        }
+
+                        AnalyticsCard(
                             icon: "arrow.left.arrow.right.square",
                             title: "Session Comparison",
                             description: "Compare metrics across sessions or time periods"
