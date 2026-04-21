@@ -14,12 +14,18 @@ struct AnalyticsView: View {
     @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
     private var fields: [CustomField]
     @ObservedObject private var iap = IAPManager.shared
+    @AppStorage("aiInsightThreshold") private var insightThreshold: Int = 5
 
     @State private var insightIndex: Int = 0
     @State private var showingPaywall: Bool = false
 
     private var insights: [AIInsight] {
-        AIInsightsEngine.generate(sessions: sessions, tracks: tracks, fields: fields)
+        AIInsightsEngine.generate(
+            sessions: sessions,
+            tracks: tracks,
+            fields: fields,
+            maxInsights: insightThreshold
+        )
     }
 
     private var hasMultipleInsights: Bool {

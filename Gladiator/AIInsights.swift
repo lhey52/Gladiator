@@ -26,11 +26,14 @@ enum AIInsightsEngine {
     private static let priorityTrendImproving = 9
     private static let priorityTrendDeclining = 10
     private static let priorityTrendPlateau = 11
+    private static let priorityMostConsistent = 12
+    private static let priorityHighVariance = 13
 
     // MARK: - Thresholds (edit here)
 
     private static let minSessionsPerCombo = 5
     private static let staleDaysThreshold = 30
+    private static let highVarianceThreshold = 0.3
 
     // MARK: - Default message
 
@@ -50,7 +53,12 @@ enum AIInsightsEngine {
 
     // MARK: - Generate insights
 
-    static func generate(sessions: [Session], tracks: [Track], fields: [CustomField] = []) -> [AIInsight] {
+    static func generate(
+        sessions: [Session],
+        tracks: [Track],
+        fields: [CustomField] = [],
+        maxInsights: Int = 5
+    ) -> [AIInsight] {
         var insights: [AIInsight] = []
 
         if let insight = lowSessionComboInsight(sessions: sessions) {
@@ -63,9 +71,10 @@ enum AIInsightsEngine {
         insights.append(contentsOf: personalBestHighInsights(sessions: sessions, fields: fields))
         insights.append(contentsOf: correlationInsights(sessions: sessions, fields: fields))
         insights.append(contentsOf: trendInsights(sessions: sessions, fields: fields))
+        insights.append(contentsOf: consistencyInsights(sessions: sessions, fields: fields))
 
         insights.sort { $0.priority < $1.priority }
-        return Array(insights.prefix(5))
+        return Array(insights.prefix(max(1, maxInsights)))
     }
 
     // MARK: - Insight: Combos with fewer than N sessions
@@ -260,6 +269,37 @@ enum AIInsightsEngine {
         }
 
         return results
+    }
+
+    // MARK: - Insight: Background consistency scan
+
+    private static func consistencyInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
+        let results = BackgroundConsistencyScanner.scanAll(sessions: sessions, fields: fields)
+        guard !results.isEmpty else { return [] }
+
+        var insights: [AIInsight] = []
+
+        // Most consistent metric per track+vehicle combination
+        let grouped = Dictionary(grouping: results) { ComboKey(track: $0.trackName, vehicle: $0.vehicleName) }
+        for (_, metrics) in grouped {
+            guard let best = metrics.min(by: { $0.coefficientOfVariation < $1.coefficientOfVariation }) else { continue }
+            let loc = best.vehicleName.isEmpty ? "at \(best.trackName)" : "at \(best.trackName) in \(best.vehicleName)"
+            insights.append(AIInsight(
+                priority: priorityMostConsistent,
+                message: "Your most consistently recorded metric \(loc) is \(best.fieldName). Strong consistency here gives you reliable data to work with."
+            ))
+        }
+
+        // High variance warnings for any metric+combo above the threshold
+        for result in results where result.coefficientOfVariation > highVarianceThreshold {
+            let loc = result.vehicleName.isEmpty ? "at \(result.trackName)" : "at \(result.trackName) in \(result.vehicleName)"
+            insights.append(AIInsight(
+                priority: priorityHighVariance,
+                message: "Your \(result.fieldName) \(loc) shows high variability across sessions. Improving consistency here could improve your setup reliability."
+            ))
+        }
+
+        return insights
     }
 
     // MARK: - Helpers
