@@ -7,6 +7,8 @@ import SwiftUI
 import SwiftData
 
 struct SettingsView: View {
+    @AppStorage("isAdminConsoleUnlocked") private var isAdminConsoleUnlocked: Bool = false
+
     var body: some View {
         NavigationStack {
             List {
@@ -90,6 +92,17 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Theme.surface)
                 .listRowSeparatorTint(Theme.hairline)
+
+                if isAdminConsoleUnlocked {
+                    NavigationLink(destination: AdminConsoleView()) {
+                        Text("Admin Console ✳︎")
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(Theme.textPrimary)
+                            .padding(.vertical, 4)
+                    }
+                    .listRowBackground(Theme.surface)
+                    .listRowSeparatorTint(Theme.hairline)
+                }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)

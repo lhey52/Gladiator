@@ -10,6 +10,7 @@ struct TrackCodeView: View {
     @Environment(\.modelContext) private var modelContext
     @ObservedObject private var iap = IAPManager.shared
     @AppStorage("activeTrackCode") private var activeCode: String = ""
+    @AppStorage("isAdminConsoleUnlocked") private var isAdminConsoleUnlocked: Bool = false
 
     @State private var inputCode: String = ""
     @State private var statusMessage: String = ""
@@ -166,7 +167,7 @@ struct TrackCodeView: View {
         switch result {
         case .success(let action):
             let normalized = inputCode.trimmingCharacters(in: .whitespaces).uppercased()
-            if action == .grantPro {
+            if action.isPersistent {
                 activeCode = normalized
             }
             inputCode = ""
@@ -184,10 +185,15 @@ struct TrackCodeView: View {
 
     private func unlockCode() {
         inputFocused = false
+        let action = TrackCodes.action(for: activeCode)
         activeCode = ""
         inputCode = ""
         statusMessage = ""
-        iap.codeGrantedPro = false
+        if let action {
+            reverseAction(action)
+        } else {
+            iap.codeGrantedPro = false
+        }
     }
 
     private func applyAction(_ action: TrackCodeAction) {
@@ -197,6 +203,19 @@ struct TrackCodeView: View {
         case .seedDemoData:
             DemoDataSeeder.seed(into: modelContext)
             showToastBriefly("Demo data loaded successfully")
+        case .unlockAdminConsole:
+            isAdminConsoleUnlocked = true
+        }
+    }
+
+    private func reverseAction(_ action: TrackCodeAction) {
+        switch action {
+        case .grantPro:
+            iap.codeGrantedPro = false
+        case .unlockAdminConsole:
+            isAdminConsoleUnlocked = false
+        case .seedDemoData:
+            break
         }
     }
 

@@ -8,6 +8,14 @@ import Foundation
 enum TrackCodeAction: Equatable {
     case grantPro
     case seedDemoData
+    case unlockAdminConsole
+
+    var isPersistent: Bool {
+        switch self {
+        case .grantPro, .unlockAdminConsole: return true
+        case .seedDemoData: return false
+        }
+    }
 }
 
 struct TrackCodeEntry {
@@ -33,8 +41,21 @@ enum TrackCodes {
             action: .seedDemoData,
             expiryDate: makeDate(year: 2026, month: 7, day: 1),
             isActive: true
+        ),
+        TrackCodeEntry(
+            code: "GLADIATORDEBUG5269",
+            action: .unlockAdminConsole,
+            expiryDate: makeDate(year: 2026, month: 7, day: 1),
+            isActive: true
         )
     ]
+
+    // MARK: - Lookup
+
+    static func action(for code: String) -> TrackCodeAction? {
+        let normalized = code.trimmingCharacters(in: .whitespaces).uppercased()
+        return allCodes.first { $0.code == normalized }?.action
+    }
 
     // MARK: - Validation
 

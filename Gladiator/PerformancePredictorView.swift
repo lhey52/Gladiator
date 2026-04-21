@@ -22,6 +22,7 @@ struct PerformancePredictorView: View {
     @State private var result: PredictiveAnalysisOutcome?
     @State private var showingPaywall: Bool = false
     @ObservedObject private var iap = IAPManager.shared
+    @AppStorage("hasOpenedPerformancePredictor") private var hasOpenedPredictor: Bool = false
 
     private var plottableFields: [CustomField] {
         allFields.filter { $0.fieldType.isPlottable }
@@ -96,6 +97,9 @@ struct PerformancePredictorView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            if !hasOpenedPredictor { hasOpenedPredictor = true }
+        }
     }
 
     private var lockedContent: some View {

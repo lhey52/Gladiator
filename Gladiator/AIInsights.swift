@@ -28,12 +28,16 @@ enum AIInsightsEngine {
     private static let priorityTrendPlateau = 11
     private static let priorityMostConsistent = 12
     private static let priorityHighVariance = 13
+    private static let priorityDataGap = 14
+    private static let priorityPredictorNudge = 15
 
     // MARK: - Thresholds (edit here)
 
     private static let minSessionsPerCombo = 5
     private static let staleDaysThreshold = 30
     private static let highVarianceThreshold = 0.3
+    private static let dataGapThreshold = 0.5
+    private static let predictorOpenedKey = "hasOpenedPerformancePredictor"
 
     // MARK: - Default message
 
@@ -72,6 +76,8 @@ enum AIInsightsEngine {
         insights.append(contentsOf: correlationInsights(sessions: sessions, fields: fields))
         insights.append(contentsOf: trendInsights(sessions: sessions, fields: fields))
         insights.append(contentsOf: consistencyInsights(sessions: sessions, fields: fields))
+        insights.append(contentsOf: dataGapInsights(sessions: sessions, fields: fields))
+        insights.append(contentsOf: predictorNudgeInsights(sessions: sessions, fields: fields))
 
         insights.sort { $0.priority < $1.priority }
         return Array(insights.prefix(max(1, maxInsights)))
@@ -300,6 +306,42 @@ enum AIInsightsEngine {
         }
 
         return insights
+    }
+
+    // MARK: - Insight: Background data quality scan
+
+    private static func dataGapInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
+        let results = BackgroundDataQualityScanner.scanAll(sessions: sessions, fields: fields)
+        var insights: [AIInsight] = []
+
+        for result in results where result.missingPercent > dataGapThreshold {
+            let loc = result.vehicleName.isEmpty
+                ? "at \(result.trackName)"
+                : "at \(result.trackName) in \(result.vehicleName)"
+            insights.append(AIInsight(
+                priority: priorityDataGap,
+                message: "Several of your sessions \(loc) are missing values for \(result.fieldName). Completing this data would improve your analytics accuracy."
+            ))
+        }
+
+        return insights
+    }
+
+    // MARK: - Insight: Performance Predictor nudge
+
+    private static func predictorNudgeInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
+        guard !UserDefaults.standard.bool(forKey: predictorOpenedKey) else { return [] }
+
+        let results = BackgroundPredictorReadinessScanner.scanAll(sessions: sessions, fields: fields)
+        return results.map { result in
+            let loc = result.vehicleName.isEmpty
+                ? "at \(result.trackName)"
+                : "at \(result.trackName) in \(result.vehicleName)"
+            return AIInsight(
+                priority: priorityPredictorNudge,
+                message: "You have enough data \(loc) to run a Performance Predictor analysis. Head to Analytics to discover what influences your performance most."
+            )
+        }
     }
 
     // MARK: - Helpers
