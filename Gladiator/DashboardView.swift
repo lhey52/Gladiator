@@ -135,14 +135,20 @@ private struct SummarySection: View {
             }
         }
         .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Theme.accent.opacity(0.35), lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.surface)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Theme.accent.opacity(0.35))
+                .frame(height: 1)
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Theme.accent.opacity(0.35))
+                .frame(height: 1)
+        }
         .shadow(color: Theme.accent.opacity(0.18), radius: 18)
+        .padding(.horizontal, -20)
     }
 
     private var totalTile: some View {
