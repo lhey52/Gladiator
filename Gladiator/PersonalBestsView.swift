@@ -81,6 +81,7 @@ struct PersonalBestsView: View {
     private var bestsList: some View {
         ScrollView {
             VStack(spacing: 12) {
+                ToolDescriptionCard(text: "Review your all-time best recorded value for every plottable metric. Time-based metrics highlight the lowest value; number-based metrics highlight the highest. Tap any row to open the session where the record was set.")
                 ForEach(plottableFields) { field in
                     bestCard(for: field)
                 }

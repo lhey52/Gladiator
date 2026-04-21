@@ -116,6 +116,7 @@ struct TrendAnalysisView: View {
     private var mainContent: some View {
         ScrollView {
             VStack(spacing: 20) {
+                ToolDescriptionCard(text: "Track how a single metric evolves over time. Pick a metric and a moving-average window to smooth session-to-session noise, then read the direction and magnitude of change from the overlaid trend line.")
                 fieldSelector
                 windowPicker
                 trendIndicator

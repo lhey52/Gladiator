@@ -75,6 +75,7 @@ struct SessionComparisonView: View {
     private var mainContent: some View {
         ScrollView {
             VStack(spacing: 20) {
+                ToolDescriptionCard(text: "Compare two sessions or two time periods side by side to see how individual metrics differ. Choose a mode — Session, Year, Month, or Custom Range — then select both sides. The better value for each metric is highlighted in orange.")
                 modePicker
                 selectors
                 results

@@ -47,6 +47,11 @@ struct PitView: View {
                             summary: summary(count: activeReminderCount, singular: "reminder", plural: "reminders"),
                             destination: PitRemindersView()
                         )
+                        comingSoonCard(
+                            title: "Track Map and Affiliates",
+                            icon: "map.fill",
+                            summary: "Coming soon"
+                        )
                     }
                     .padding(20)
                 }
@@ -135,6 +140,57 @@ struct PitView: View {
             .shadow(color: Theme.accent.opacity(0.1), radius: 8, y: 3)
         }
         .buttonStyle(.plain)
+    }
+
+    private func comingSoonCard(
+        title: String,
+        icon: String,
+        summary: String
+    ) -> some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.textTertiary.opacity(0.12))
+                    .frame(width: 56, height: 56)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(
+                        Theme.textTertiary.opacity(0.5),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
+                    )
+                    .frame(width: 56, height: 56)
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .heavy))
+                    .foregroundColor(Theme.textTertiary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title.uppercased())
+                    .font(.system(size: 16, weight: .heavy))
+                    .tracking(1.2)
+                    .foregroundColor(Theme.textSecondary)
+                Text(summary)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.textTertiary)
+            }
+
+            Spacer()
+
+            Image(systemName: "clock")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Theme.textTertiary)
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.surfaceElevated)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(
+                    Theme.textTertiary.opacity(0.4),
+                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
+                )
+        )
     }
 }
 

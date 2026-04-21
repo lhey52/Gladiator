@@ -83,6 +83,7 @@ struct CorrelationView: View {
                 fieldSelectors
                 ZStack {
                     VStack(spacing: 20) {
+                        ToolDescriptionCard(text: "Measure the statistical relationship between two metrics across your sessions. Select two fields to compare — the tool calculates the Pearson coefficient, rates the strength and direction, and flags how reliable the result is based on sample size.")
                         resultSection
                         disclaimer
                     }

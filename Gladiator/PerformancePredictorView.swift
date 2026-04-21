@@ -147,6 +147,7 @@ struct PerformancePredictorView: View {
         } else {
             ScrollView {
                 VStack(spacing: 18) {
+                    ToolDescriptionCard(text: "Discover which metrics most influence your performance. Select an outcome to predict and up to five predictors, then tap Calculate. The tool runs a multiple linear regression and ranks each predictor by its relative contribution to the model.")
                     outcomeCard
                     predictorsCard
                     calculateButton

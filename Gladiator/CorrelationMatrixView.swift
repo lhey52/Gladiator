@@ -136,6 +136,7 @@ struct CorrelationMatrixView: View {
         } else {
             ScrollView {
                 VStack(spacing: 20) {
+                    ToolDescriptionCard(text: "Scan correlations between every pair of your plottable metrics at once on a color-coded grid. Orange cells signal positive relationships, blue cells signal negative, and neutral tones indicate weak or no relationship. Tap any colored cell for a full breakdown of that pair.")
                     matrixCard
                     legendCard
                     footerNote
