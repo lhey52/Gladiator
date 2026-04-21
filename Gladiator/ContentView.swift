@@ -68,11 +68,17 @@ struct ContentView: View {
                 }
                 .tag(2)
 
+            PitView()
+                .tabItem {
+                    Label("The Pit", systemImage: "wrench.and.screwdriver.fill")
+                }
+                .tag(3)
+
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "slider.horizontal.3")
                 }
-                .tag(3)
+                .tag(4)
         }
         .tint(Theme.accent)
         .preferredColorScheme(.dark)

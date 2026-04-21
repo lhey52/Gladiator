@@ -14,6 +14,17 @@ struct GladiatorApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [Session.self, CustomField.self, FieldValue.self, Track.self, Vehicle.self])
+        .modelContainer(for: [
+            Session.self,
+            CustomField.self,
+            FieldValue.self,
+            Track.self,
+            Vehicle.self,
+            PitNote.self,
+            PitChecklistTemplate.self,
+            PitChecklistItem.self,
+            PitGoal.self,
+            PitReminder.self
+        ])
     }
 }
