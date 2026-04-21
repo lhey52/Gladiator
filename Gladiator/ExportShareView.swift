@@ -8,6 +8,7 @@ import SwiftData
 
 struct ExportShareView: View {
     @ObservedObject private var iap = IAPManager.shared
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\Session.date, order: .reverse)])
     private var sessions: [Session]
     @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
@@ -16,6 +17,11 @@ struct ExportShareView: View {
     private var tracks: [Track]
 
     @State private var showingPaywall: Bool = false
+    @State private var isExporting: Bool = false
+    @State private var exportURL: URL?
+    @State private var showingShareSheet: Bool = false
+    @State private var exportErrorMessage: String?
+    @State private var showingExportError: Bool = false
 
     var body: some View {
         ZStack {
@@ -44,7 +50,7 @@ struct ExportShareView: View {
 
                 if iap.isProUser {
                     Button {
-                        // Export functionality coming soon
+                        startExport()
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "arrow.up.doc.fill")
@@ -89,13 +95,56 @@ struct ExportShareView: View {
 
                 Spacer()
             }
+
+            if isExporting {
+                Color.black.opacity(0.5).ignoresSafeArea()
+                ProgressView()
+                    .tint(Theme.accent)
+                    .scaleEffect(1.5)
+            }
         }
         .navigationTitle("Export & Share")
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(isPresented: $showingPaywall) {
             PaywallView()
         }
+        .sheet(isPresented: $showingShareSheet) {
+            if let url = exportURL {
+                ActivityView(items: [url])
+            }
+        }
+        .alert("Export Failed", isPresented: $showingExportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(exportErrorMessage ?? "The export failed. Please try again.")
+        }
     }
+
+    private func startExport() {
+        isExporting = true
+        Task {
+            do {
+                let url = try GladiatorDataExport.writeExport(context: modelContext)
+                exportURL = url
+                isExporting = false
+                showingShareSheet = true
+            } catch {
+                exportErrorMessage = "The export failed. \(error.localizedDescription)"
+                isExporting = false
+                showingExportError = true
+            }
+        }
+    }
+}
+
+private struct ActivityView: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) { }
 }
 
 #Preview {

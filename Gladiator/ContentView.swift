@@ -6,10 +6,15 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
     @State private var selection: Int = 0
     @State private var sessionsTypeFilter: SessionType?
+    @State private var pendingImportURL: URL?
+    @State private var showingImportConfirm: Bool = false
+    @State private var showingImportError: Bool = false
+    @Environment(\.modelContext) private var modelContext
 
     init() {
         let appearance = UITabBarAppearance()
@@ -82,6 +87,39 @@ struct ContentView: View {
         }
         .tint(Theme.accent)
         .preferredColorScheme(.dark)
+        .onOpenURL { url in
+            guard url.pathExtension.lowercased() == GladiatorDataExport.fileExtension else { return }
+            pendingImportURL = url
+            showingImportConfirm = true
+        }
+        .alert(
+            "Import Gladiator data?",
+            isPresented: $showingImportConfirm,
+            presenting: pendingImportURL
+        ) { url in
+            Button("Cancel", role: .cancel) {
+                pendingImportURL = nil
+            }
+            Button("Import") {
+                performImport(url: url)
+            }
+        } message: { _ in
+            Text("Note: duplicate sessions will not be excluded and may result in duplicate entries. This cannot be undone.")
+        }
+        .alert("Import failed", isPresented: $showingImportError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("The file may be corrupted or incompatible.")
+        }
+    }
+
+    private func performImport(url: URL) {
+        defer { pendingImportURL = nil }
+        do {
+            try GladiatorDataExport.importData(from: url, into: modelContext)
+        } catch {
+            showingImportError = true
+        }
     }
 }
 
