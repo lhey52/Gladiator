@@ -8,6 +8,7 @@ import SwiftUI
 struct NewsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var news = NewsService.shared
+    @State private var browserURL: URL?
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -40,6 +41,10 @@ struct NewsView: View {
             .refreshable {
                 await news.refresh()
             }
+            .sheet(item: $browserURL) { url in
+                SafariBrowserView(url: url)
+                    .ignoresSafeArea()
+            }
         }
         .preferredColorScheme(.dark)
     }
@@ -64,7 +69,7 @@ struct NewsView: View {
             VStack(spacing: 0) {
                 ForEach(Array(news.articles.enumerated()), id: \.element.id) { index, article in
                     Button {
-                        UIApplication.shared.open(article.url)
+                        browserURL = article.url
                     } label: {
                         articleRow(article)
                     }

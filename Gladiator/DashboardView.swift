@@ -22,31 +22,52 @@ struct DashboardView: View {
 
     @State private var greeting: String = ""
     @State private var showingNews: Bool = false
+    @State private var browserURL: URL?
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 0) {
                         if showNewsTicker, !news.articles.isEmpty {
                             newsTicker
+                                .padding(.horizontal, 20)
+                                .padding(.top, 8)
+                                .padding(.bottom, 12)
                         }
-                        if sessions.isEmpty, !tipDismissed {
-                            dashboardTip
+
+                        VStack(spacing: 20) {
+                            if sessions.isEmpty, !tipDismissed {
+                                dashboardTip
+                            }
+                            header
                         }
-                        header
+                        .padding(.horizontal, 20)
+                        .padding(.top, showNewsTicker && !news.articles.isEmpty ? 0 : 8)
+
                         SummarySection(sessions: sessions)
+                            .padding(.top, 20)
+
                         TypeBreakdownSection(sessions: sessions, onSelectType: onSelectType)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
+
                         ActivityChartSection(sessions: sessions)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
+
                         RecentSessionsSection(sessions: Array(sessions.prefix(5)))
+                            .padding(.top, 20)
+
                         if !news.articles.isEmpty {
                             latestNewsSection
+                                .padding(.horizontal, 20)
+                                .padding(.top, 20)
                         }
+
                         Color.clear.frame(height: 8)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
                 }
             }
             .navigationBarHidden(true)
@@ -61,6 +82,10 @@ struct DashboardView: View {
             }
             .fullScreenCover(isPresented: $showingNews) {
                 NewsView()
+            }
+            .sheet(item: $browserURL) { url in
+                SafariBrowserView(url: url)
+                    .ignoresSafeArea()
             }
         }
     }
@@ -96,10 +121,10 @@ struct DashboardView: View {
 
     private var newsTicker: some View {
         let tickerText = news.articles.prefix(10).map { "\($0.title)  ·  \($0.source)" }.joined(separator: "     ")
-        return NewsTickerView(text: tickerText) { index in
-            let articles = Array(news.articles.prefix(10))
-            guard index < articles.count else { return }
-            UIApplication.shared.open(articles[index].url)
+        return NewsTickerView(text: tickerText) {
+            if let first = news.articles.first {
+                browserURL = first.url
+            }
         }
     }
 
@@ -133,7 +158,7 @@ struct DashboardView: View {
             VStack(spacing: 0) {
                 ForEach(Array(news.articles.prefix(5).enumerated()), id: \.element.id) { index, article in
                     Button {
-                        UIApplication.shared.open(article.url)
+                        browserURL = article.url
                     } label: {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
@@ -228,15 +253,16 @@ private struct SummarySection: View {
                 latestTile
             }
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
-        )
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(Theme.surface)
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Theme.accent.opacity(0.35), lineWidth: 1)
+            VStack {
+                Rectangle().frame(height: 1).foregroundColor(Theme.hairline)
+                Spacer()
+                Rectangle().frame(height: 1).foregroundColor(Theme.hairline)
+            }
         )
-        .shadow(color: Theme.accent.opacity(0.18), radius: 18)
     }
 
     private var totalTile: some View {
@@ -481,7 +507,7 @@ private struct RecentSessionsSection: View {
                     .foregroundColor(Theme.textSecondary)
                 Spacer()
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 24)
 
             if sessions.isEmpty {
                 emptyCard
@@ -498,8 +524,13 @@ private struct RecentSessionsSection: View {
             .foregroundColor(Theme.textTertiary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 28)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
+            .background(Theme.surface)
+            .overlay(
+                VStack {
+                    Rectangle().frame(height: 1).foregroundColor(Theme.hairline)
+                    Spacer()
+                    Rectangle().frame(height: 1).foregroundColor(Theme.hairline)
+                }
             )
     }
 
@@ -520,8 +551,13 @@ private struct RecentSessionsSection: View {
                 }
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
+        .background(Theme.surface)
+        .overlay(
+            VStack {
+                Rectangle().frame(height: 1).foregroundColor(Theme.hairline)
+                Spacer()
+                Rectangle().frame(height: 1).foregroundColor(Theme.hairline)
+            }
         )
     }
 }
