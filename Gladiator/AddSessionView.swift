@@ -7,7 +7,6 @@ import SwiftUI
 import SwiftData
 
 private enum SessionFormField: Hashable {
-    case track
     case custom(String)
     case notes
 }
@@ -76,11 +75,10 @@ struct AddSessionView: View {
                 if !tipDismissed {
                     sessionFormTip
                 }
-                trackCard
-                vehicleCard
-                dateCard
-                typeCard
-                customFieldCards
+                sessionCard
+                if !customFields.isEmpty {
+                    metricsCard
+                }
                 notesCard
             }
             .padding(20)
@@ -130,24 +128,57 @@ struct AddSessionView: View {
         }
     }
 
-    private var vehicleCard: some View {
-        fieldCard(label: "VEHICLE") {
-            Picker("", selection: $vehicleName) {
-                Text("Select Vehicle")
-                    .foregroundColor(Theme.textTertiary)
-                    .tag("")
-                ForEach(vehicles) { vehicle in
-                    Text(vehicle.name).tag(vehicle.name)
+    // MARK: - Session card (type / track / vehicle / date)
+
+    private var sessionCard: some View {
+        VStack(spacing: 0) {
+            cardHeader("SESSION")
+            typeRow
+            Divider().background(Theme.hairline)
+            trackRow
+            Divider().background(Theme.hairline)
+            vehicleRow
+            Divider().background(Theme.hairline)
+            dateRow
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    private func cardHeader(_ text: String) -> some View {
+        HStack {
+            Text(text)
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.8)
+                .foregroundColor(Theme.accent)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+    }
+
+    private var typeRow: some View {
+        row(label: "TYPE") {
+            Picker("", selection: $sessionType) {
+                ForEach(SessionType.allCases) { type in
+                    Text(type.rawValue).tag(type)
                 }
             }
             .pickerStyle(.menu)
             .tint(Theme.accent)
-            .font(.system(size: 18, weight: .heavy))
+            .labelsHidden()
         }
     }
 
-    private var trackCard: some View {
-        fieldCard(label: "TRACK") {
+    private var trackRow: some View {
+        row(label: "TRACK") {
             Picker("", selection: $trackName) {
                 Text("Select Track")
                     .foregroundColor(Theme.textTertiary)
@@ -158,12 +189,28 @@ struct AddSessionView: View {
             }
             .pickerStyle(.menu)
             .tint(Theme.accent)
-            .font(.system(size: 18, weight: .heavy))
+            .labelsHidden()
         }
     }
 
-    private var dateCard: some View {
-        fieldCard(label: "DATE") {
+    private var vehicleRow: some View {
+        row(label: "VEHICLE") {
+            Picker("", selection: $vehicleName) {
+                Text("Select Vehicle")
+                    .foregroundColor(Theme.textTertiary)
+                    .tag("")
+                ForEach(vehicles) { vehicle in
+                    Text(vehicle.name).tag(vehicle.name)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Theme.accent)
+            .labelsHidden()
+        }
+    }
+
+    private var dateRow: some View {
+        row(label: "DATE") {
             DatePicker(
                 "",
                 selection: $date,
@@ -176,34 +223,55 @@ struct AddSessionView: View {
         }
     }
 
-    private var typeCard: some View {
-        fieldCard(label: "SESSION TYPE") {
-            HStack(spacing: 8) {
-                ForEach(SessionType.allCases) { type in
-                    TypeButton(
-                        type: type,
-                        isSelected: sessionType == type
-                    ) {
-                        sessionType = type
-                    }
+    @ViewBuilder
+    private func row<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            Spacer()
+            content()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+
+    // MARK: - Metrics card
+
+    private var metricsCard: some View {
+        VStack(spacing: 0) {
+            cardHeader("CUSTOM DATA")
+            ForEach(Array(customFields.enumerated()), id: \.element.id) { index, field in
+                MetricRow(
+                    field: field,
+                    value: bindingForField(field),
+                    focusedField: $focusedField
+                )
+                if index < customFields.count - 1 {
+                    Divider().background(Theme.hairline)
                 }
             }
         }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
     }
 
-    @ViewBuilder
-    private var customFieldCards: some View {
-        ForEach(customFields) { field in
-            CustomFieldInput(
-                field: field,
-                value: bindingForField(field),
-                focusedField: $focusedField
-            )
-        }
-    }
+    // MARK: - Notes card
 
     private var notesCard: some View {
-        fieldCard(label: "NOTES", alignment: .leading) {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("NOTES")
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.8)
+                .foregroundColor(Theme.accent)
+
             ZStack(alignment: .topLeading) {
                 if notes.isEmpty {
                     Text("Setup, conditions, thoughts…")
@@ -221,6 +289,16 @@ struct AddSessionView: View {
                     .focused($focusedField, equals: .notes)
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
     }
 
     private func bindingForField(_ field: CustomField) -> Binding<String> {
@@ -250,35 +328,9 @@ struct AddSessionView: View {
 
         dismiss()
     }
-
-    @ViewBuilder
-    func fieldCard<Content: View>(
-        label: String,
-        alignment: HorizontalAlignment = .leading,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: alignment, spacing: 10) {
-            Text(label)
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.8)
-                .foregroundColor(Theme.accent)
-            content()
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
-    }
 }
 
-private struct CustomFieldInput: View {
+private struct MetricRow: View {
     let field: CustomField
     @Binding var value: String
     var focusedField: FocusState<SessionFormField?>.Binding
@@ -291,73 +343,31 @@ private struct CustomFieldInput: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: field.fieldType.systemImage)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(Theme.accent)
-                Text(field.name.uppercased())
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(1.8)
-                    .foregroundColor(Theme.accent)
-            }
+        HStack(alignment: .center) {
+            Text(field.name.uppercased())
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            Spacer()
             if field.fieldType == .time {
                 TimePickerInput(totalSeconds: timeBinding)
             } else {
                 TextField(
                     "",
                     text: $value,
-                    prompt: Text("Enter \(field.fieldType.rawValue.lowercased())").foregroundColor(Theme.textTertiary)
+                    prompt: Text("Enter \(field.fieldType.rawValue.lowercased())")
+                        .foregroundColor(Theme.textTertiary)
                 )
-                .font(.system(size: 18, weight: .heavy))
+                .font(.system(size: 15, weight: .heavy))
                 .foregroundColor(Theme.textPrimary)
                 .keyboardType(field.fieldType == .number ? .decimalPad : .default)
+                .multilineTextAlignment(.trailing)
                 .autocorrectionDisabled()
                 .focused(focusedField, equals: .custom(field.name))
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
-    }
-}
-
-private struct TypeButton: View {
-    let type: SessionType
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: type.systemImage)
-                    .font(.system(size: 16, weight: .bold))
-                Text(type.shortLabel)
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(1)
-            }
-            .foregroundColor(isSelected ? Theme.background : Theme.textSecondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? Theme.accent : Theme.surfaceElevated)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? Theme.accent : Theme.hairline, lineWidth: 1)
-            )
-            .shadow(color: isSelected ? Theme.accent.opacity(0.35) : .clear, radius: 10)
-        }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 }
 
