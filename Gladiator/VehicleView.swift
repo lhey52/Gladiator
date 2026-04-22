@@ -25,7 +25,7 @@ struct VehicleView: View {
                 vehicleLimitBanner
             }
         }
-        .navigationTitle("Vehicles")
+        .navigationTitle("Vehicles & Drivers")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -246,22 +246,27 @@ private struct VehicleFormSheet: View {
     let onSave: (String) -> Void
 
     @State private var name: String = ""
+    @State private var driver: String = ""
 
-    private var trimmed: String {
+    private var trimmedName: String {
         name.trimmingCharacters(in: .whitespaces)
     }
 
+    private var combinedName: String {
+        Vehicle.combine(name: name, driver: driver)
+    }
+
     private var isDuplicate: Bool {
-        guard !trimmed.isEmpty else { return false }
-        let lower = trimmed.lowercased()
+        let candidate = combinedName.lowercased()
+        guard !candidate.isEmpty else { return false }
         return existingNames.contains { existing in
             let isExcluded = excludeName.map { $0.lowercased() == existing.lowercased() } ?? false
-            return !isExcluded && existing.lowercased() == lower
+            return !isExcluded && existing.lowercased() == candidate
         }
     }
 
     private var canSave: Bool {
-        !trimmed.isEmpty && !isDuplicate
+        !trimmedName.isEmpty && !isDuplicate
     }
 
     var body: some View {
@@ -270,35 +275,10 @@ private struct VehicleFormSheet: View {
                 Theme.background.ignoresSafeArea()
                     .dismissKeyboardOnTap()
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("VEHICLE NAME")
-                            .font(.system(size: 10, weight: .heavy))
-                            .tracking(1.8)
-                            .foregroundColor(Theme.accent)
-                        TextField(
-                            "",
-                            text: $name,
-                            prompt: Text("e.g. Porsche 911 GT3").foregroundColor(Theme.textTertiary)
-                        )
-                        .font(.system(size: 18, weight: .heavy))
-                        .foregroundColor(Theme.textPrimary)
-                        .textInputAutocapitalization(.words)
-                        .autocorrectionDisabled()
-                        if isDuplicate {
-                            Text("A vehicle with this name already exists")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.red)
-                        }
+                    VStack(spacing: 18) {
+                        nameCard
+                        driverCard
                     }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Theme.surface)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Theme.hairline, lineWidth: 1)
-                    )
                     .padding(20)
                 }
             }
@@ -311,7 +291,7 @@ private struct VehicleFormSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(buttonLabel) {
-                        onSave(trimmed)
+                        onSave(combinedName)
                         dismiss()
                     }
                     .font(.system(size: 15, weight: .heavy))
@@ -321,7 +301,71 @@ private struct VehicleFormSheet: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onAppear { name = initialName }
+        .onAppear {
+            let parts = Vehicle.split(name: initialName)
+            name = parts.name
+            driver = parts.driver
+        }
+    }
+
+    private var nameCard: some View {
+        fieldCard(label: "VEHICLE NAME") {
+            VStack(alignment: .leading, spacing: 8) {
+                TextField(
+                    "",
+                    text: $name,
+                    prompt: Text("e.g. Porsche 911 GT3").foregroundColor(Theme.textTertiary)
+                )
+                .font(.system(size: 18, weight: .heavy))
+                .foregroundColor(Theme.textPrimary)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                if isDuplicate {
+                    Text("A vehicle with this name and driver already exists.")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.red)
+                }
+            }
+        }
+    }
+
+    private var driverCard: some View {
+        fieldCard(label: "DRIVER (OPTIONAL)") {
+            TextField(
+                "",
+                text: $driver,
+                prompt: Text("e.g. John Smith, Driver 1").foregroundColor(Theme.textTertiary)
+            )
+            .font(.system(size: 18, weight: .heavy))
+            .foregroundColor(Theme.textPrimary)
+            .textInputAutocapitalization(.words)
+            .autocorrectionDisabled()
+        }
+    }
+
+    @ViewBuilder
+    private func fieldCard<Content: View>(
+        label: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(label)
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.8)
+                .foregroundColor(Theme.accent)
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
     }
 }
 

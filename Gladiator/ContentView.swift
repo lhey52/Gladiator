@@ -78,10 +78,10 @@ struct ContentView: View {
                     Label("The Pit", systemImage: "wrench.and.screwdriver.fill")
                 }
                 .tag(3)
-
+//MARK setting icon was slider.horizontal.3
             SettingsView()
                 .tabItem {
-                    Label("Settings", systemImage: "slider.horizontal.3")
+                    Label("Settings", systemImage: "gearshape.fill")
                 }
                 .tag(4)
         }

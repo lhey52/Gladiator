@@ -33,7 +33,7 @@ struct SessionCustomizationView: View {
                     .listRowSeparatorTint(Theme.hairline)
 
                     NavigationLink(destination: VehicleView()) {
-                        Text("Vehicles")
+                        Text("Vehicles and Drivers")
                             .font(.system(size: 15, weight: .heavy))
                             .foregroundColor(Theme.textPrimary)
                             .padding(.vertical, 4)
