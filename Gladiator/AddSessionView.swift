@@ -128,28 +128,129 @@ struct AddSessionView: View {
         }
     }
 
-    // MARK: - Session card (type / track / vehicle / date)
+    // MARK: - Session card (mirrors SessionDetailView header, but editable)
 
     private var sessionCard: some View {
-        VStack(spacing: 0) {
-            cardHeader("SESSION")
-            typeRow
-            Divider().background(Theme.hairline)
-            trackRow
-            Divider().background(Theme.hairline)
-            vehicleRow
-            Divider().background(Theme.hairline)
-            dateRow
+        VStack(alignment: .leading, spacing: 12) {
+            typeSelector
+            trackField
+            vehicleField
+            dateField
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Theme.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Theme.accent.opacity(0.35), lineWidth: 1)
         )
+        .shadow(color: Theme.accent.opacity(0.15), radius: 16)
     }
+
+    private var typeSelector: some View {
+        HStack(spacing: 8) {
+            ForEach(SessionType.allCases) { type in
+                typeChip(type)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func typeChip(_ type: SessionType) -> some View {
+        let isSelected = sessionType == type
+        return Button {
+            sessionType = type
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: type.systemImage)
+                    .font(.system(size: 11, weight: .bold))
+                Text(type.rawValue.uppercased())
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .allowsTightening(true)
+            }
+            .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(isSelected ? Theme.accent.opacity(0.15) : Theme.surfaceElevated)
+            )
+            .overlay(
+                Capsule().stroke(isSelected ? Theme.accent.opacity(0.5) : Theme.hairline, lineWidth: 1)
+            )
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var trackField: some View {
+        Menu {
+            ForEach(tracks) { track in
+                Button(track.name) {
+                    trackName = track.name
+                }
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(trackName.isEmpty ? "Track Name" : trackName)
+                    .font(.system(size: 32, weight: .heavy))
+                    .foregroundColor(trackName.isEmpty ? Theme.textTertiary : Theme.textPrimary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Theme.textTertiary)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var vehicleField: some View {
+        Menu {
+            Button("None") { vehicleName = "" }
+            if !vehicles.isEmpty {
+                Divider()
+                ForEach(vehicles) { vehicle in
+                    Button(vehicle.name) {
+                        vehicleName = vehicle.name
+                    }
+                }
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(vehicleName.isEmpty ? "Vehicle" : vehicleName)
+                    .font(.system(size: 32, weight: .heavy))
+                    .foregroundColor(vehicleName.isEmpty ? Theme.textTertiary : Theme.textPrimary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Theme.textTertiary)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var dateField: some View {
+        DatePicker(
+            "",
+            selection: $date,
+            displayedComponents: [.date, .hourAndMinute]
+        )
+        .labelsHidden()
+        .datePickerStyle(.compact)
+        .tint(Theme.accent)
+        .colorScheme(.dark)
+    }
+
+    // MARK: - Metrics card
 
     private func cardHeader(_ text: String) -> some View {
         HStack {
@@ -163,81 +264,6 @@ struct AddSessionView: View {
         .padding(.top, 14)
         .padding(.bottom, 10)
     }
-
-    private var typeRow: some View {
-        row(label: "TYPE") {
-            Picker("", selection: $sessionType) {
-                ForEach(SessionType.allCases) { type in
-                    Text(type.rawValue).tag(type)
-                }
-            }
-            .pickerStyle(.menu)
-            .tint(Theme.accent)
-            .labelsHidden()
-        }
-    }
-
-    private var trackRow: some View {
-        row(label: "TRACK") {
-            Picker("", selection: $trackName) {
-                Text("Select Track")
-                    .foregroundColor(Theme.textTertiary)
-                    .tag("")
-                ForEach(tracks) { track in
-                    Text(track.name).tag(track.name)
-                }
-            }
-            .pickerStyle(.menu)
-            .tint(Theme.accent)
-            .labelsHidden()
-        }
-    }
-
-    private var vehicleRow: some View {
-        row(label: "VEHICLE") {
-            Picker("", selection: $vehicleName) {
-                Text("Select Vehicle")
-                    .foregroundColor(Theme.textTertiary)
-                    .tag("")
-                ForEach(vehicles) { vehicle in
-                    Text(vehicle.name).tag(vehicle.name)
-                }
-            }
-            .pickerStyle(.menu)
-            .tint(Theme.accent)
-            .labelsHidden()
-        }
-    }
-
-    private var dateRow: some View {
-        row(label: "DATE") {
-            DatePicker(
-                "",
-                selection: $date,
-                displayedComponents: [.date, .hourAndMinute]
-            )
-            .labelsHidden()
-            .datePickerStyle(.compact)
-            .tint(Theme.accent)
-            .colorScheme(.dark)
-        }
-    }
-
-    @ViewBuilder
-    private func row<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 11, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
-            Spacer()
-            content()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - Metrics card
 
     private var metricsCard: some View {
         VStack(spacing: 0) {
