@@ -418,12 +418,24 @@ private struct MetricRow: View {
         )
     }
 
+    private var parts: (name: String, unit: String) {
+        CustomField.split(name: field.name)
+    }
+
     var body: some View {
         HStack(alignment: .center) {
-            Text(field.name.uppercased())
-                .font(.system(size: 11, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(parts.name.uppercased())
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+                if !parts.unit.isEmpty {
+                    Text(parts.unit)
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundColor(Theme.textTertiary)
+                }
+            }
             Spacer()
             if field.fieldType == .time {
                 TimePickerInput(totalSeconds: timeBinding)

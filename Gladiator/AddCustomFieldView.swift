@@ -8,6 +8,7 @@ import SwiftData
 
 private enum FieldFormField: Hashable {
     case name
+    case unit
 }
 
 struct AddCustomFieldView: View {
@@ -19,6 +20,7 @@ struct AddCustomFieldView: View {
     let nextSortOrder: Int
 
     @State private var name: String = ""
+    @State private var unit: String = ""
     @State private var fieldType: FieldType = .number
     @FocusState private var focusedField: FieldFormField?
 
@@ -32,6 +34,10 @@ struct AddCustomFieldView: View {
         !name.trimmingCharacters(in: .whitespaces).isEmpty && !isDuplicate
     }
 
+    private var focusableFields: [FieldFormField] {
+        fieldType == .number ? [.name, .unit] : [.name]
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -42,7 +48,7 @@ struct AddCustomFieldView: View {
             .navigationTitle("New Metric")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
-            .keyboardToolbar(focusedField: $focusedField, fields: [.name])
+            .keyboardToolbar(focusedField: $focusedField, fields: focusableFields)
         }
         .preferredColorScheme(.dark)
     }
@@ -51,6 +57,9 @@ struct AddCustomFieldView: View {
         ScrollView {
             VStack(spacing: 18) {
                 nameCard
+                if fieldType == .number {
+                    unitCard
+                }
                 typeCard
             }
             .padding(20)
@@ -93,6 +102,21 @@ struct AddCustomFieldView: View {
         }
     }
 
+    private var unitCard: some View {
+        fieldCard(label: "UNIT (OPTIONAL)") {
+            TextField(
+                "",
+                text: $unit,
+                prompt: Text("e.g. PSI, degrees F, lbs").foregroundColor(Theme.textTertiary)
+            )
+            .font(.system(size: 18, weight: .heavy))
+            .foregroundColor(Theme.textPrimary)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .focused($focusedField, equals: .unit)
+        }
+    }
+
     private var typeCard: some View {
         fieldCard(label: "METRIC TYPE") {
             HStack(spacing: 10) {
@@ -106,8 +130,14 @@ struct AddCustomFieldView: View {
     }
 
     private func save() {
+        let combinedName: String
+        if fieldType == .number {
+            combinedName = CustomField.combine(name: name, unit: unit)
+        } else {
+            combinedName = name.trimmingCharacters(in: .whitespaces)
+        }
         let field = CustomField(
-            name: name.trimmingCharacters(in: .whitespaces),
+            name: combinedName,
             fieldType: fieldType,
             sortOrder: nextSortOrder
         )

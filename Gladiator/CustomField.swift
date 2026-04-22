@@ -85,6 +85,33 @@ final class CustomField {
         get { FieldType(rawValue: fieldTypeRaw) ?? .text }
         set { fieldTypeRaw = newValue.rawValue }
     }
+
+    static func combine(name: String, unit: String) -> String {
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        let trimmedUnit = unit.trimmingCharacters(in: .whitespaces)
+        if trimmedUnit.isEmpty { return trimmedName }
+        return "\(trimmedName) (\(trimmedUnit))"
+    }
+
+    static func split(name combined: String) -> (name: String, unit: String) {
+        guard combined.hasSuffix(")"),
+              let openParenIndex = combined.lastIndex(of: "(") else {
+            return (combined, "")
+        }
+        let indexBeforeParen = combined.index(before: openParenIndex)
+        guard indexBeforeParen >= combined.startIndex,
+              combined[indexBeforeParen] == " " else {
+            return (combined, "")
+        }
+        let name = String(combined[..<indexBeforeParen])
+        let unitStart = combined.index(after: openParenIndex)
+        let unitEnd = combined.index(before: combined.endIndex)
+        let unit = String(combined[unitStart..<unitEnd])
+        return (
+            name.trimmingCharacters(in: .whitespaces),
+            unit.trimmingCharacters(in: .whitespaces)
+        )
+    }
 }
 
 @Model

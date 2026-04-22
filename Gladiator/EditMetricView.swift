@@ -8,6 +8,7 @@ import SwiftData
 
 private enum EditFormField: Hashable {
     case name
+    case unit
 }
 
 struct EditMetricView: View {
@@ -18,6 +19,7 @@ struct EditMetricView: View {
     let field: CustomField
 
     @State private var name: String = ""
+    @State private var unit: String = ""
     @State private var fieldType: FieldType = .number
     @FocusState private var focusedField: EditFormField?
 
@@ -31,6 +33,10 @@ struct EditMetricView: View {
         !name.trimmingCharacters(in: .whitespaces).isEmpty && !isDuplicate
     }
 
+    private var focusableFields: [EditFormField] {
+        fieldType == .number ? [.name, .unit] : [.name]
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -41,11 +47,13 @@ struct EditMetricView: View {
             .navigationTitle("Edit Metric")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
-            .keyboardToolbar(focusedField: $focusedField, fields: [.name])
+            .keyboardToolbar(focusedField: $focusedField, fields: focusableFields)
         }
         .preferredColorScheme(.dark)
         .onAppear {
-            name = field.name
+            let parts = CustomField.split(name: field.name)
+            name = parts.name
+            unit = parts.unit
             fieldType = field.fieldType
         }
     }
@@ -54,6 +62,9 @@ struct EditMetricView: View {
         ScrollView {
             VStack(spacing: 18) {
                 nameCard
+                if fieldType == .number {
+                    unitCard
+                }
                 typeCard
             }
             .padding(20)
@@ -96,6 +107,21 @@ struct EditMetricView: View {
         }
     }
 
+    private var unitCard: some View {
+        fieldCard(label: "UNIT (OPTIONAL)") {
+            TextField(
+                "",
+                text: $unit,
+                prompt: Text("e.g. PSI, degrees F, lbs").foregroundColor(Theme.textTertiary)
+            )
+            .font(.system(size: 18, weight: .heavy))
+            .foregroundColor(Theme.textPrimary)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .focused($focusedField, equals: .unit)
+        }
+    }
+
     private var typeCard: some View {
         fieldCard(label: "METRIC TYPE") {
             HStack(spacing: 10) {
@@ -109,7 +135,11 @@ struct EditMetricView: View {
     }
 
     private func save() {
-        field.name = name.trimmingCharacters(in: .whitespaces)
+        if fieldType == .number {
+            field.name = CustomField.combine(name: name, unit: unit)
+        } else {
+            field.name = name.trimmingCharacters(in: .whitespaces)
+        }
         field.fieldType = fieldType
         dismiss()
     }
