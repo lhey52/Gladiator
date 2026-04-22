@@ -58,6 +58,14 @@ struct AnalyticsView: View {
                         }
 
                         AnalyticsCard(
+                            icon: "list.bullet.rectangle",
+                            title: "Metric Log",
+                            description: "View all recorded values for any metric across your sessions"
+                        ) {
+                            MetricLogView()
+                        }
+
+                        AnalyticsCard(
                             icon: "function",
                             title: "Correlation Analysis",
                             description: "Find statistical relationships between metrics"

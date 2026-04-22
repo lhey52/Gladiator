@@ -105,6 +105,13 @@ enum GlossaryData {
             seeAlso: ["Personal Best", "Scatter Plot"]
         ),
         GlossaryTerm(
+            id: "metric-log",
+            name: "Metric Log",
+            definition: "A table view that lists every session containing a recorded value for a chosen metric. Each row shows the session date, track, vehicle, and the recorded value. Rows can be sorted by date or by value to surface patterns in your data without switching tools.",
+            children: [],
+            seeAlso: ["Custom Metric", "Personal Best", "Scatter Plot"]
+        ),
+        GlossaryTerm(
             id: "scatter-plot",
             name: "Scatter Plot",
             definition: "A graph that plots two metrics against each other, with one on the X axis and one on the Y axis. Each data point represents a session. Scatter plots are useful for visually identifying relationships or clusters in your data — for example, whether higher tire pressure tends to correlate with faster lap times.",

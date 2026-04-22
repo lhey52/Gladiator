@@ -24,6 +24,7 @@ struct EditSessionView: View {
     let session: Session
 
     @AppStorage("sessionFormTipDismissed") private var tipDismissed: Bool = false
+    @AppStorage("sessionProgressBarEnabled") private var progressBarEnabled: Bool = true
     @State private var date: Date = .now
     @State private var trackName: String = ""
     @State private var vehicleName: String = ""
@@ -50,7 +51,12 @@ struct EditSessionView: View {
             ZStack {
                 Theme.background.ignoresSafeArea()
                     .dismissKeyboardOnTap()
-                formScroll
+                VStack(spacing: 0) {
+                    if progressBarEnabled {
+                        progressBar
+                    }
+                    formScroll
+                }
             }
             .navigationTitle("Edit Session")
             .navigationBarTitleDisplayMode(.inline)
@@ -59,6 +65,47 @@ struct EditSessionView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear { loadSession() }
+    }
+
+    private var completionProgress: Double {
+        let total = 3 + customFields.count
+        guard total > 0 else { return 0 }
+        var filled = 1 // session type always has a value
+        if !trackName.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        if !vehicleName.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        for field in customFields {
+            let raw = fieldEntries[field.name, default: ""].trimmingCharacters(in: .whitespaces)
+            if !raw.isEmpty {
+                filled += 1
+            }
+        }
+        return Double(filled) / Double(total)
+    }
+
+    private var progressBar: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Theme.surfaceElevated)
+                        .frame(height: 5)
+                    Capsule()
+                        .fill(Theme.accent)
+                        .frame(width: max(geo.size.width * completionProgress, completionProgress > 0 ? 4 : 0), height: 5)
+                        .shadow(color: Theme.accent.opacity(0.4), radius: 4)
+                }
+            }
+            .frame(height: 5)
+
+            Text("\(Int((completionProgress * 100).rounded()))% COMPLETE")
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.2)
+                .foregroundColor(Theme.textSecondary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .animation(.easeInOut(duration: 0.25), value: completionProgress)
     }
 
     private var formScroll: some View {
@@ -157,16 +204,41 @@ struct EditSessionView: View {
     }
 
     private var typeRow: some View {
-        row(label: "TYPE") {
-            Picker("", selection: $sessionType) {
-                ForEach(SessionType.allCases) { type in
-                    Text(type.rawValue).tag(type)
-                }
+        HStack(spacing: 8) {
+            ForEach(SessionType.allCases) { type in
+                typeChip(type)
             }
-            .pickerStyle(.menu)
-            .tint(Theme.accent)
-            .labelsHidden()
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func typeChip(_ type: SessionType) -> some View {
+        let isSelected = sessionType == type
+        return Button {
+            sessionType = type
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: type.systemImage)
+                    .font(.system(size: 11, weight: .bold))
+                Text(type.rawValue.uppercased())
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .allowsTightening(true)
+            }
+            .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(
+                Capsule().fill(isSelected ? Theme.accent.opacity(0.15) : Theme.surfaceElevated)
+            )
+            .overlay(
+                Capsule().stroke(isSelected ? Theme.accent.opacity(0.5) : Theme.hairline, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var trackRow: some View {

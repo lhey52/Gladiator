@@ -15,26 +15,30 @@ struct AppearanceView: View {
             Theme.background.ignoresSafeArea()
 
             List {
-                Toggle(isOn: $newsEnabled) {
-                    Text("News Feed")
-                        .font(.system(size: 15, weight: .heavy))
-                        .foregroundColor(Theme.textPrimary)
-                        .padding(.vertical, 4)
-                }
-                .tint(Theme.accent)
-                .listRowBackground(Theme.surface)
-                .listRowSeparatorTint(Theme.hairline)
+                Section {
+                    Toggle(isOn: $newsEnabled) {
+                        Text("News Feed")
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(Theme.textPrimary)
+                            .padding(.vertical, 4)
+                    }
+                    .tint(Theme.accent)
+                    .listRowBackground(Theme.surface)
+                    .listRowSeparatorTint(Theme.hairline)
 
-                Toggle(isOn: $newsTickerEnabled) {
-                    Text("News Ticker")
-                        .font(.system(size: 15, weight: .heavy))
-                        .foregroundColor(newsEnabled ? Theme.textPrimary : Theme.textTertiary)
-                        .padding(.vertical, 4)
+                    Toggle(isOn: $newsTickerEnabled) {
+                        Text("News Ticker")
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(newsEnabled ? Theme.textPrimary : Theme.textTertiary)
+                            .padding(.vertical, 4)
+                    }
+                    .tint(Theme.accent)
+                    .disabled(!newsEnabled)
+                    .listRowBackground(Theme.surface)
+                    .listRowSeparatorTint(Theme.hairline)
+                } header: {
+                    sectionHeader("Dashboard")
                 }
-                .tint(Theme.accent)
-                .disabled(!newsEnabled)
-                .listRowBackground(Theme.surface)
-                .listRowSeparatorTint(Theme.hairline)
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
@@ -50,6 +54,13 @@ struct AppearanceView: View {
             }
             Task { await NewsService.shared.refresh() }
         }
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 10, weight: .heavy))
+            .tracking(1.8)
+            .foregroundColor(Theme.accent)
     }
 }
 
