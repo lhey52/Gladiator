@@ -15,14 +15,14 @@ struct PredictorContribution: Identifiable {
 struct PredictiveAnalysisResult {
     let outcome: String
     let predictors: [String]
-    let rSquared: Double
+    let adjustedRSquared: Double
     let contributions: [PredictorContribution]
     let sampleSize: Int
 }
 
 enum PredictiveAnalysisOutcome {
     case success(PredictiveAnalysisResult)
-    case insufficientData(sampleSize: Int)
+    case insufficientData(sampleSize: Int, predictorCount: Int)
     case singularMatrix(sampleSize: Int)
     case noVariance
 }
@@ -34,8 +34,8 @@ enum PredictivePowerLevel {
     case strong
     case veryStrong
 
-    static func from(rSquared: Double) -> PredictivePowerLevel {
-        let pct = rSquared * 100
+    static func from(adjustedRSquared: Double) -> PredictivePowerLevel {
+        let pct = adjustedRSquared * 100
         switch pct {
         case ..<20: return .weak
         case ..<40: return .moderate
@@ -67,7 +67,7 @@ enum PredictivePowerLevel {
 }
 
 enum RegressionEngine {
-    static let minimumSessions = 5
+    static let sessionsPerPredictor = 10
     static let maxPredictors = 5
 
     static func analyze(
@@ -76,7 +76,7 @@ enum RegressionEngine {
         predictors: [String]
     ) -> PredictiveAnalysisOutcome {
         guard !outcome.isEmpty, !predictors.isEmpty else {
-            return .insufficientData(sampleSize: 0)
+            return .insufficientData(sampleSize: 0, predictorCount: predictors.count)
         }
 
         var X: [[Double]] = []
@@ -102,11 +102,10 @@ enum RegressionEngine {
         }
 
         let n = y.count
-        guard n >= minimumSessions else {
-            return .insufficientData(sampleSize: n)
-        }
-
         let k = predictors.count
+        guard n >= sessionsPerPredictor * k else {
+            return .insufficientData(sampleSize: n, predictorCount: k)
+        }
 
         let yMean = y.reduce(0, +) / Double(n)
         let yDev = y.map { $0 - yMean }
@@ -174,6 +173,13 @@ enum RegressionEngine {
         let ssTotStd = yStd.map { $0 * $0 }.reduce(0, +)
         let rSquared = ssTotStd > 0 ? max(0, min(1, 1 - ssRes / ssTotStd)) : 0
 
+        let adjustedRSquared: Double = {
+            let denom = n - k - 1
+            guard denom > 0 else { return rSquared }
+            let adj = 1 - (1 - rSquared) * Double(n - 1) / Double(denom)
+            return max(0, min(1, adj))
+        }()
+
         let totalAbs = betaStar.map { abs($0) }.reduce(0, +)
         var contributions: [PredictorContribution] = []
         for (j, name) in predictors.enumerated() {
@@ -189,7 +195,7 @@ enum RegressionEngine {
         return .success(PredictiveAnalysisResult(
             outcome: outcome,
             predictors: predictors,
-            rSquared: rSquared,
+            adjustedRSquared: adjustedRSquared,
             contributions: contributions,
             sampleSize: n
         ))

@@ -125,8 +125,8 @@ enum GlossaryData {
             children: [
                 GlossaryChild(
                     id: "r-squared",
-                    name: "R-Squared (Predictive Power)",
-                    definition: "A value between 0 and 1 (shown as a percentage) that measures how well the selected predictors, taken together, explain variation in the outcome. A higher value means a stronger predictive relationship. 0% means the predictors explain none of the variation; 100% means they explain all of it."
+                    name: "R-Squared",
+                    definition: "A value between 0 and 1 (shown as a percentage) that measures how well the selected predictors, taken together, explain variation in the outcome. 0% means the predictors explain none of the variation; 100% means they explain all of it. The Performance Predictor displays the adjusted form of R-Squared rather than raw R-Squared — see Predictive Power."
                 ),
                 GlossaryChild(
                     id: "multiple-linear-regression",
@@ -139,7 +139,20 @@ enum GlossaryData {
                     definition: "Each predictor's share of the model's total importance, expressed as a percentage. Contributions are derived from standardized regression coefficients so metrics on different scales (for example tire pressure in PSI vs lap time in seconds) can be compared fairly."
                 )
             ],
-            seeAlso: ["Correlation", "Correlation Matrix", "Standard Deviation"]
+            seeAlso: ["Correlation", "Correlation Matrix", "Predictive Power", "Standard Deviation"]
+        ),
+        GlossaryTerm(
+            id: "predictive-power",
+            name: "Predictive Power",
+            definition: "The Performance Predictor's headline score, displayed as a percentage. It uses Adjusted R-Squared, a corrected version of R-Squared. The adjustment discounts the score for each additional predictor in the model, preventing a misleadingly high number from simply stacking more variables. A lower Predictive Power does not mean the tool is broken — it means untracked factors (weather, tire temperature, driver state, unlogged setup changes) also influence the outcome. Tracking more of those factors as metrics raises the ceiling over time.",
+            children: [
+                GlossaryChild(
+                    id: "adjusted-r-squared",
+                    name: "Adjusted R-Squared",
+                    definition: "A correction applied to R-Squared that discounts the score for each additional predictor. Raw R-Squared never decreases when you add more predictors — even noise can nudge it upward. Adjusted R-Squared removes that inflation so the number reflects real predictive signal rather than model complexity. Formula: 1 - (1 - R²) × (n - 1) / (n - k - 1), where n is the number of sessions and k is the number of predictors."
+                )
+            ],
+            seeAlso: ["Performance Predictor", "Correlation"]
         ),
         GlossaryTerm(
             id: "standard-deviation",

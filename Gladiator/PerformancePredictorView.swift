@@ -420,8 +420,8 @@ struct PerformancePredictorView: View {
             EmptyView()
         case .success(let r):
             ResultCard(result: r)
-        case .insufficientData(let n):
-            insufficientDataCard(sampleSize: n)
+        case .insufficientData(let n, let k):
+            insufficientDataCard(sampleSize: n, predictorCount: k)
         case .singularMatrix(let n):
             singularMatrixCard(sampleSize: n)
         case .noVariance:
@@ -429,19 +429,22 @@ struct PerformancePredictorView: View {
         }
     }
 
-    private func insufficientDataCard(sampleSize: Int) -> some View {
-        warningCard(
+    private func insufficientDataCard(sampleSize: Int, predictorCount: Int) -> some View {
+        let sessionWord = sampleSize == 1 ? "session" : "sessions"
+        let predictorWord = predictorCount == 1 ? "predictor" : "predictors"
+        return warningCard(
             icon: "exclamationmark.triangle",
             headline: "NOT ENOUGH DATA",
-            message: "At least \(RegressionEngine.minimumSessions) sessions with values for every selected field are needed. Currently \(sampleSize)."
+            message: "Performance Predictor needs at least \(RegressionEngine.sessionsPerPredictor) sessions per predictor to produce reliable results. You have \(sampleSize) \(sessionWord) for \(predictorCount) \(predictorWord) — add more sessions or reduce the predictor count."
         )
     }
 
     private func singularMatrixCard(sampleSize: Int) -> some View {
-        warningCard(
+        let sessionWord = sampleSize == 1 ? "session" : "sessions"
+        return warningCard(
             icon: "exclamationmark.triangle",
             headline: "UNSTABLE MODEL",
-            message: "The predictors are too redundant (high multicollinearity) or one has no variance in the \(sampleSize) matching sessions. Try removing a predictor or adding more diverse sessions."
+            message: "The selected predictors are too redundant or one has no variation across the \(sampleSize) analyzed \(sessionWord) — the model cannot separate their effects. Remove a predictor or add more diverse sessions."
         )
     }
 
@@ -449,7 +452,7 @@ struct PerformancePredictorView: View {
         warningCard(
             icon: "exclamationmark.triangle",
             headline: "NO VARIATION",
-            message: "The outcome field has the same value in every matching session, so there is nothing to predict."
+            message: "The outcome has the same value in every analyzed session — there is nothing to predict. Add sessions with different outcome values."
         )
     }
 
@@ -515,11 +518,11 @@ private struct ResultCard: View {
     let result: PredictiveAnalysisResult
 
     private var powerLevel: PredictivePowerLevel {
-        PredictivePowerLevel.from(rSquared: result.rSquared)
+        PredictivePowerLevel.from(adjustedRSquared: result.adjustedRSquared)
     }
 
-    private var rSquaredPercent: Int {
-        Int((result.rSquared * 100).rounded())
+    private var adjustedRSquaredPercent: Int {
+        Int((result.adjustedRSquared * 100).rounded())
     }
 
     var body: some View {
@@ -547,12 +550,12 @@ private struct ResultCard: View {
 
     private var predictivePowerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("PREDICTIVE POWER")
+            Text("ADJUSTED PREDICTIVE POWER")
                 .font(.system(size: 10, weight: .heavy))
                 .tracking(1.5)
                 .foregroundColor(Theme.textSecondary)
             HStack(alignment: .lastTextBaseline, spacing: 6) {
-                Text("\(rSquaredPercent)")
+                Text("\(adjustedRSquaredPercent)")
                     .font(.system(size: 56, weight: .heavy, design: .rounded))
                     .foregroundColor(Theme.accent)
                 Text("%")
