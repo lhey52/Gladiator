@@ -30,6 +30,10 @@ final class IAPManager: ObservableObject {
         subscriptionActive || codeGrantedPro
     }
 
+    var hasStoreKitSubscription: Bool {
+        subscriptionActive
+    }
+
     private var updateTask: Task<Void, Never>?
 
     private init() {
