@@ -23,6 +23,7 @@ struct ScatterPlotView: View {
     @State private var navigateToSession: Session?
     @State private var filter = AnalyticsFilterState()
     @State private var showingFilter: Bool = false
+    @State private var isLoading: Bool = true
 
     @State private var zoomScale: CGFloat = 1.0
     @State private var gestureScale: CGFloat = 1.0
@@ -140,6 +141,18 @@ struct ScatterPlotView: View {
     }
 
     var body: some View {
+        if isLoading {
+            AnalyticsLoadingView(
+                toolName: "Scatter Plot",
+                sessionCount: sessions.count,
+                onComplete: { isLoading = false }
+            )
+        } else {
+            toolContent
+        }
+    }
+
+    private var toolContent: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()

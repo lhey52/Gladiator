@@ -22,6 +22,7 @@ struct CorrelationView: View {
     @State private var showingPaywall: Bool = false
     @State private var filter = AnalyticsFilterState()
     @State private var showingFilter: Bool = false
+    @State private var isLoading: Bool = true
 
     private var plottableFields: [CustomField] {
         allFields.filter { $0.fieldType.isPlottable }
@@ -49,6 +50,18 @@ struct CorrelationView: View {
     }
 
     var body: some View {
+        if isLoading {
+            AnalyticsLoadingView(
+                toolName: "Correlation Analysis",
+                sessionCount: sessions.count,
+                onComplete: { isLoading = false }
+            )
+        } else {
+            toolContent
+        }
+    }
+
+    private var toolContent: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()

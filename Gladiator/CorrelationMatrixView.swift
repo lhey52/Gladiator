@@ -17,6 +17,7 @@ struct CorrelationMatrixView: View {
     @State private var showingFilter: Bool = false
     @State private var selectedPair: MatrixPairSelection?
     @State private var showingPaywall: Bool = false
+    @State private var isLoading: Bool = true
     @ObservedObject private var iap = IAPManager.shared
 
     private let cellSize: CGFloat = 64
@@ -47,6 +48,18 @@ struct CorrelationMatrixView: View {
     }
 
     var body: some View {
+        if isLoading {
+            AnalyticsLoadingView(
+                toolName: "Correlation Matrix",
+                sessionCount: sessions.count,
+                onComplete: { isLoading = false }
+            )
+        } else {
+            toolContent
+        }
+    }
+
+    private var toolContent: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()

@@ -22,6 +22,7 @@ struct PerformancePredictorView: View {
     @State private var result: PredictiveAnalysisOutcome?
     @State private var showingPaywall: Bool = false
     @State private var activeTooltip: TooltipKind?
+    @State private var isLoading: Bool = true
     @ObservedObject private var iap = IAPManager.shared
     @AppStorage("hasOpenedPerformancePredictor") private var hasOpenedPredictor: Bool = false
 
@@ -121,6 +122,18 @@ struct PerformancePredictorView: View {
     }
 
     var body: some View {
+        if isLoading {
+            AnalyticsLoadingView(
+                toolName: "Performance Predictor",
+                sessionCount: sessions.count,
+                onComplete: { isLoading = false }
+            )
+        } else {
+            toolContent
+        }
+    }
+
+    private var toolContent: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()

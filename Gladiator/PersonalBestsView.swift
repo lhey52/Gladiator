@@ -15,6 +15,7 @@ struct PersonalBestsView: View {
 
     @State private var filter = AnalyticsFilterState()
     @State private var showingFilter: Bool = false
+    @State private var isLoading: Bool = true
 
     private var filteredSessions: [Session] {
         filter.apply(to: sessions)
@@ -25,6 +26,18 @@ struct PersonalBestsView: View {
     }
 
     var body: some View {
+        if isLoading {
+            AnalyticsLoadingView(
+                toolName: "Personal Bests",
+                sessionCount: sessions.count,
+                onComplete: { isLoading = false }
+            )
+        } else {
+            toolContent
+        }
+    }
+
+    private var toolContent: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()

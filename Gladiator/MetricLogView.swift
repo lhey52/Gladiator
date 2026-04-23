@@ -20,6 +20,7 @@ struct MetricLogView: View {
     @State private var showingPicker: Bool = false
     @State private var sortField: SortField = .date
     @State private var sortOrder: SortOrder = .descending
+    @State private var isLoading: Bool = true
 
     private enum SortField: Equatable {
         case date
@@ -85,6 +86,18 @@ struct MetricLogView: View {
     }
 
     var body: some View {
+        if isLoading {
+            AnalyticsLoadingView(
+                toolName: "Metric Log",
+                sessionCount: sessions.count,
+                onComplete: { isLoading = false }
+            )
+        } else {
+            toolContent
+        }
+    }
+
+    private var toolContent: some View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
