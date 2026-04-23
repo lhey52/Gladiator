@@ -327,16 +327,7 @@ struct PerformancePredictorView: View {
                     .foregroundColor(Theme.textTertiary)
             }
 
-            if predictors.isEmpty {
-                Text("No predictors selected, add some below")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Theme.textTertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceElevated)
-                    )
-            } else {
+            if !predictors.isEmpty {
                 VStack(spacing: 8) {
                     ForEach(Array(predictors.enumerated()), id: \.offset) { index, name in
                         predictorRow(name: name, index: index)
@@ -544,8 +535,14 @@ struct PerformancePredictorView: View {
                 )
                 rowDivider
                 requirementRow(
-                    label: "Sessions needed with \(predictors.count) \(predictors.count == 1 ? "predictor" : "predictors")",
-                    value: "\(sessionsRequired)",
+                    label: "Required minimum sessions",
+                    value: "\(RegressionEngine.sessionsPerPredictor * predictors.count)",
+                    status: .none
+                )
+                rowDivider
+                requirementRow(
+                    label: "Recommended minimum sessions",
+                    value: "\(RegressionEngine.highSessionsPerPredictor * predictors.count)",
                     status: .none
                 )
                 rowDivider
@@ -571,6 +568,12 @@ struct PerformancePredictorView: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(Theme.hairline, lineWidth: 1)
             )
+
+            Text("All predictor metrics must be recorded in each session to count towards the session total")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -613,7 +616,7 @@ struct PerformancePredictorView: View {
             case .warning:
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Theme.accent)
+                    .foregroundColor(Theme.warning)
             case .none:
                 EmptyView()
             }
@@ -704,10 +707,14 @@ private struct ResultCard: View {
 
     private var predictivePowerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("ADJUSTED PREDICTIVE POWER")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("ADJUSTED PREDICTIVE POWER")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+                Spacer(minLength: 8)
+                ConfidenceBadge(level: result.confidence)
+            }
             HStack(alignment: .lastTextBaseline, spacing: 6) {
                 Text("\(adjustedRSquaredPercent)")
                     .font(.system(size: 56, weight: .heavy, design: .rounded))
@@ -885,6 +892,40 @@ private struct FieldPickerSheet: View {
                 }
                 .padding(20)
             }
+        }
+    }
+}
+
+// MARK: - Confidence badge
+
+private struct ConfidenceBadge: View {
+    let level: ConfidenceLevel
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+                .shadow(color: color.opacity(0.5), radius: 3)
+            Text(level.displayName.uppercased())
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1)
+                .foregroundColor(color)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(color.opacity(0.12)))
+        .overlay(Capsule().stroke(color.opacity(0.45), lineWidth: 1))
+    }
+
+    private var color: Color {
+        switch level {
+        case .veryLow: return Theme.danger
+        case .low: return Theme.textTertiary
+        case .moderate: return Theme.warning
+        case .high: return Theme.accent
+        case .veryHigh: return Theme.success
         }
     }
 }

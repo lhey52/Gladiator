@@ -18,6 +18,58 @@ struct PredictiveAnalysisResult {
     let adjustedRSquared: Double
     let contributions: [PredictorContribution]
     let sampleSize: Int
+    let confidence: ConfidenceLevel
+}
+
+enum ConfidenceLevel {
+    case veryLow
+    case low
+    case moderate
+    case high
+    case veryHigh
+
+    var levelName: String {
+        switch self {
+        case .veryLow: return "Very Low"
+        case .low: return "Low"
+        case .moderate: return "Moderate"
+        case .high: return "High"
+        case .veryHigh: return "Very High"
+        }
+    }
+
+    var displayName: String {
+        "\(levelName) Confidence"
+    }
+
+    static func from(sessionsPerPredictor: Int) -> ConfidenceLevel {
+        switch sessionsPerPredictor {
+        case ..<RegressionEngine.recommendedSessionsPerPredictor: return .veryLow
+        case ..<RegressionEngine.moderateSessionsPerPredictor: return .low
+        case ..<RegressionEngine.highSessionsPerPredictor: return .moderate
+        case ..<RegressionEngine.idealSessionsPerPredictor: return .high
+        default: return .veryHigh
+        }
+    }
+
+    func description(predictorCount: Int, sampleSize: Int) -> String {
+        switch self {
+        case .veryLow:
+            let add = max(0, RegressionEngine.highSessionsPerPredictor * predictorCount - sampleSize)
+            return "Not enough data for reliable results — more sessions strongly recommended (add \(add) \(add == 1 ? "session" : "sessions") to reach the recommended threshold)"
+        case .low:
+            let add = max(0, RegressionEngine.highSessionsPerPredictor * predictorCount - sampleSize)
+            return "More sessions recommended for reliable results (add \(add) \(add == 1 ? "session" : "sessions") to reach the recommended threshold)"
+        case .moderate:
+            let add = max(0, RegressionEngine.highSessionsPerPredictor * predictorCount - sampleSize)
+            return "A reasonable result — more sessions will improve reliability (add \(add) \(add == 1 ? "session" : "sessions") to reach the recommended threshold)"
+        case .high:
+            let add = max(0, RegressionEngine.idealSessionsPerPredictor * predictorCount - sampleSize)
+            return "A well supported result — your data meets the recommended threshold; even more sessions will strengthen reliability (add \(add) \(add == 1 ? "session" : "sessions") to reach the ideal threshold)"
+        case .veryHigh:
+            return "An excellently supported result — your data meets the ideal threshold"
+        }
+    }
 }
 
 enum PredictiveAnalysisOutcome {
@@ -67,7 +119,11 @@ enum PredictivePowerLevel {
 }
 
 enum RegressionEngine {
-    static let sessionsPerPredictor = 10
+    static let sessionsPerPredictor = 10             // minimum — Stevens 1992
+    static let recommendedSessionsPerPredictor = 20  // Hair et al 2010
+    static let moderateSessionsPerPredictor = 30     // Moderate Confidence threshold
+    static let highSessionsPerPredictor = 50         // High Confidence threshold
+    static let idealSessionsPerPredictor = 100       // ideal — Very High Confidence threshold
     static let maxPredictors = 5
 
     static func analyze(
@@ -180,6 +236,8 @@ enum RegressionEngine {
             return max(0, min(1, adj))
         }()
 
+        let confidence = ConfidenceLevel.from(sessionsPerPredictor: n / k)
+
         let totalAbs = betaStar.map { abs($0) }.reduce(0, +)
         var contributions: [PredictorContribution] = []
         for (j, name) in predictors.enumerated() {
@@ -197,7 +255,8 @@ enum RegressionEngine {
             predictors: predictors,
             adjustedRSquared: adjustedRSquared,
             contributions: contributions,
-            sampleSize: n
+            sampleSize: n,
+            confidence: confidence
         ))
     }
 
@@ -206,10 +265,14 @@ enum RegressionEngine {
         var sentence = "\(top.name) is the strongest predictor of \(result.outcome), accounting for \(formatPercent(top.sharePercent)) of the model."
 
         let rest = Array(result.contributions.dropFirst())
-        guard !rest.isEmpty else { return sentence }
+        if !rest.isEmpty {
+            let phrases = rest.map { "\($0.name) contributes \(formatPercent($0.sharePercent))" }
+            sentence += " " + joinPhrases(phrases) + "."
+        }
 
-        let phrases = rest.map { "\($0.name) contributes \(formatPercent($0.sharePercent))" }
-        sentence += " " + joinPhrases(phrases) + "."
+        let k = result.predictors.count
+        let predictorWord = k == 1 ? "predictor" : "predictors"
+        sentence += " Based on \(result.sampleSize) sessions with \(k) \(predictorWord) this result has \(result.confidence.levelName) confidence. \(result.confidence.description(predictorCount: k, sampleSize: result.sampleSize))."
         return sentence
     }
 
