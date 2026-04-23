@@ -24,6 +24,17 @@ struct AdminConsoleView: View {
                         )
                     }
                     .buttonStyle(.plain)
+
+                    NavigationLink {
+                        DemoSeederAdminView()
+                    } label: {
+                        consoleCard(
+                            title: "Demo Seeder",
+                            icon: "tray.and.arrow.down.fill",
+                            subtitle: "Load curated demo data into the app for testing and showcase."
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(20)
             }

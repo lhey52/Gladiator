@@ -180,7 +180,7 @@ struct PaywallView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Theme.textSecondary)
                     }
-                    Text("7-day free trial included")
+                    Text("One time 7-day free trial included")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Theme.accent.opacity(0.8))
                 }

@@ -21,8 +21,52 @@ struct PerformancePredictorView: View {
     @State private var showingAddPredictor: Bool = false
     @State private var result: PredictiveAnalysisOutcome?
     @State private var showingPaywall: Bool = false
+    @State private var activeTooltip: TooltipKind?
     @ObservedObject private var iap = IAPManager.shared
     @AppStorage("hasOpenedPerformancePredictor") private var hasOpenedPredictor: Bool = false
+
+    private enum TooltipKind {
+        case outcome
+        case predictors
+
+        var message: String {
+            switch self {
+            case .outcome:
+                return "Select the metric you want to predict. The analysis will show how well your chosen predictors explain changes in this metric."
+            case .predictors:
+                return "Add up to 5 predictor metrics using the button below. These are the metrics you want to test as potential influences on your outcome metric."
+            }
+        }
+    }
+
+    private func tooltipBinding(for kind: TooltipKind) -> Binding<Bool> {
+        Binding(
+            get: { activeTooltip == kind },
+            set: { activeTooltip = $0 ? kind : nil }
+        )
+    }
+
+    private func tooltipTrigger(for kind: TooltipKind) -> some View {
+        Button {
+            activeTooltip = kind
+        } label: {
+            Image(systemName: "questionmark.circle")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Theme.accent)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: tooltipBinding(for: kind)) {
+            Text(kind.message)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .padding(16)
+                .frame(width: 260)
+                .fixedSize(horizontal: false, vertical: true)
+                .presentationCompactAdaptation(.popover)
+                .presentationBackground(Theme.surface)
+        }
+    }
 
     private var plottableFields: [CustomField] {
         allFields.filter { $0.fieldType.isPlottable }
@@ -182,10 +226,14 @@ struct PerformancePredictorView: View {
 
     private var outcomeCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("OUTCOME (WHAT YOU WANT TO PREDICT)")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.accent)
+            HStack(spacing: 6) {
+                Text("OUTCOME (WHAT YOU WANT TO PREDICT)")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.accent)
+                tooltipTrigger(for: .outcome)
+                Spacer(minLength: 0)
+            }
 
             Button { showingOutcomePicker = true } label: {
                 HStack(spacing: 10) {
@@ -199,6 +247,7 @@ struct PerformancePredictorView: View {
                             .foregroundColor(Theme.textPrimary)
                             .lineLimit(1)
                     } else {
+                     
                         Text("SELECT FIELD")
                             .font(.system(size: 13, weight: .heavy))
                             .tracking(1)
@@ -235,11 +284,12 @@ struct PerformancePredictorView: View {
 
     private var predictorsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("PREDICTORS (WHAT INFLUENCES IT)")
                     .font(.system(size: 10, weight: .heavy))
                     .tracking(1.5)
                     .foregroundColor(Theme.accent)
+                tooltipTrigger(for: .predictors)
                 Spacer()
                 Text("\(predictors.count) / \(RegressionEngine.maxPredictors)")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -247,7 +297,7 @@ struct PerformancePredictorView: View {
             }
 
             if predictors.isEmpty {
-                Text("No predictors selected")
+                Text("No predictors selected, add some below")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(Theme.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)

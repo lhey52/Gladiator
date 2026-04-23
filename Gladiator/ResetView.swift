@@ -9,6 +9,7 @@ struct ResetView: View {
     @AppStorage("sessionFormTipDismissed") private var sessionFormTipDismissed: Bool = false
     @AppStorage("dashboardTipDismissed") private var dashboardTipDismissed: Bool = false
     @AppStorage("dashboardDeviceTipDismissed") private var dashboardDeviceTipDismissed: Bool = false
+    @AppStorage("settingsCustomizationTipDismissed") private var settingsCustomizationTipDismissed: Bool = false
     @State private var showingConfirm: Bool = false
 
     var body: some View {
@@ -38,6 +39,7 @@ struct ResetView: View {
                 sessionFormTipDismissed = false
                 dashboardTipDismissed = false
                 dashboardDeviceTipDismissed = false
+                settingsCustomizationTipDismissed = false
             }
         } message: {
             Text("This will restore all dismissed tips. Continue?")

@@ -175,14 +175,21 @@ struct AnalyticsView: View {
                 .blur(radius: iap.isProUser ? 0 : 6)
 
                 if !iap.isProUser {
-                    HStack(spacing: 8) {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 12, weight: .bold))
-                        Text("UNLOCK PRO")
-                            .font(.system(size: 12, weight: .heavy))
-                            .tracking(1.5)
+                    VStack(spacing: 4) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("UNLOCK PRO")
+                                .font(.system(size: 12, weight: .heavy))
+                                .tracking(1.5)
+                        }
+                        Text("7 DAY FREE TRIAL")
+                            .font(.system(size: 10, weight: .heavy))
+                            .tracking(1.2)
+                            .foregroundColor(Theme.accent.opacity(0.8))
                     }
                     .foregroundColor(Theme.accent)
+                    .multilineTextAlignment(.center)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .background(Capsule().fill(Theme.surface))
