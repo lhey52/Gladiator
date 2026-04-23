@@ -92,6 +92,34 @@ struct PerformancePredictorView: View {
         predictors.count < RegressionEngine.maxPredictors && !availableForPredictor.isEmpty
     }
 
+    private var requiredFieldNames: [String] {
+        var names: [String] = []
+        if !outcome.isEmpty { names.append(outcome) }
+        names.append(contentsOf: predictors)
+        return names
+    }
+
+    private var availableSessionCount: Int {
+        let names = requiredFieldNames
+        guard !names.isEmpty else { return 0 }
+        return filteredSessions.reduce(0) { count, session in
+            let ok = names.allSatisfy { name in
+                guard let fv = session.fieldValues.first(where: { $0.fieldName == name }),
+                      Double(fv.value) != nil else { return false }
+                return true
+            }
+            return count + (ok ? 1 : 0)
+        }
+    }
+
+    private var sessionsRequired: Int {
+        RegressionEngine.sessionsPerPredictor * predictors.count
+    }
+
+    private var meetsThreshold: Bool {
+        availableSessionCount >= sessionsRequired
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -194,6 +222,9 @@ struct PerformancePredictorView: View {
                     ToolDescriptionCard(text: "Discover which metrics most influence your performance. Select an outcome to predict and up to five predictors, then tap Calculate. The tool runs a multiple linear regression and ranks each predictor by its relative contribution to the model.")
                     outcomeCard
                     predictorsCard
+                    if !predictors.isEmpty {
+                        requirementsSection
+                    }
                     calculateButton
                     resultSection
                 }
@@ -479,6 +510,129 @@ struct PerformancePredictorView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
         )
+    }
+
+    // MARK: - Requirements panel
+
+    private var requirementsSection: some View {
+        VStack(spacing: 8) {
+            requirementsPanel
+            if filter.isActive {
+                filterActiveNote
+            }
+        }
+    }
+
+    private var requirementsPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("REQUIREMENTS")
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.accent)
+
+            VStack(spacing: 0) {
+                requirementRow(
+                    label: "Outcome",
+                    value: outcome.isEmpty ? "—" : outcome,
+                    status: outcome.isEmpty ? .none : .ok
+                )
+                rowDivider
+                requirementRow(
+                    label: "Predictors",
+                    value: predictors.isEmpty ? "—" : "\(predictors.count) selected",
+                    status: predictors.isEmpty ? .none : .ok
+                )
+                rowDivider
+                requirementRow(
+                    label: "Sessions needed with \(predictors.count) \(predictors.count == 1 ? "predictor" : "predictors")",
+                    value: "\(sessionsRequired)",
+                    status: .none
+                )
+                rowDivider
+                requirementRow(
+                    label: "Sessions available",
+                    value: "\(availableSessionCount)",
+                    status: meetsThreshold ? .ok : .warning
+                )
+                if !meetsThreshold {
+                    rowDivider
+                    let needed = max(0, sessionsRequired - availableSessionCount)
+                    requirementRow(
+                        label: "Still needed",
+                        value: "Need \(needed) more \(needed == 1 ? "session" : "sessions")",
+                        status: .warning
+                    )
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceElevated)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Theme.hairline, lineWidth: 1)
+            )
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    private var rowDivider: some View {
+        Rectangle()
+            .fill(Theme.hairline)
+            .frame(height: 1)
+            .padding(.leading, 14)
+    }
+
+    private enum RequirementStatus {
+        case none, ok, warning
+    }
+
+    private func requirementRow(label: String, value: String, status: RequirementStatus) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Theme.textSecondary)
+            Spacer(minLength: 12)
+            Text(value)
+                .font(.system(size: 13, weight: .heavy))
+                .foregroundColor(Theme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            switch status {
+            case .ok:
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(Theme.success)
+            case .warning:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(Theme.accent)
+            case .none:
+                EmptyView()
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private var filterActiveNote: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                .font(.system(size: 11, weight: .bold))
+            Text("Filters are active — removing filters may increase available sessions")
+                .font(.system(size: 11, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundColor(Theme.textTertiary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 4)
     }
 
     // MARK: - Actions
