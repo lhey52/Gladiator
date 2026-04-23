@@ -14,6 +14,8 @@ struct ContentView: View {
     @State private var pendingImportURL: URL?
     @State private var showingImportConfirm: Bool = false
     @State private var showingImportError: Bool = false
+    @AppStorage("hasSeenTutorial") private var hasSeenTutorial: Bool = false
+    @State private var isShowingTutorial: Bool = false
     @Environment(\.modelContext) private var modelContext
 
     init() {
@@ -87,6 +89,24 @@ struct ContentView: View {
         }
         .tint(Theme.accent)
         .preferredColorScheme(.dark)
+        .overlay {
+            if isShowingTutorial {
+                TutorialView(isPresented: $isShowingTutorial)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: isShowingTutorial)
+        .onAppear {
+            if !hasSeenTutorial && !isShowingTutorial {
+                isShowingTutorial = true
+            }
+        }
+        .onChange(of: hasSeenTutorial) { _, newValue in
+            if !newValue { isShowingTutorial = true }
+        }
+        .onChange(of: isShowingTutorial) { _, newValue in
+            if !newValue { hasSeenTutorial = true }
+        }
         .onOpenURL { url in
             guard url.pathExtension.lowercased() == GladiatorDataExport.fileExtension else { return }
             pendingImportURL = url

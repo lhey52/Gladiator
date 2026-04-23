@@ -128,7 +128,7 @@ struct ExportShareView: View {
             }
         }
         .sheet(isPresented: $showingTutorial) {
-            TutorialView()
+            DataTransferTutorialView()
         }
         .alert("Before You Share", isPresented: $showingPreShareAlert) {
             Button("Cancel", role: .cancel) { }

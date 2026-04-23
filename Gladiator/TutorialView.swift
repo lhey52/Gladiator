@@ -6,150 +6,195 @@
 import SwiftUI
 
 struct TutorialView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Binding var isPresented: Bool
+    @State private var stage: Stage = .welcome
 
-    private let steps: [TutorialStep] = [
-        TutorialStep(
-            number: 1,
-            icon: "square.and.arrow.up",
-            title: "Send the File",
-            body: "Tap the share button and choose Email or AirDrop to send your Gladiator data file to another device."
+    private enum Stage: Equatable {
+        case welcome
+        case step(Int)
+    }
+
+    private let steps: [FirstLaunchTutorialStep] = [
+        FirstLaunchTutorialStep(
+            title: "Dashboard",
+            description: "Your Dashboard gives you a live overview of your racing data, recent sessions, and AI insights.",
+            tabIndex: 0
         ),
-        TutorialStep(
-            number: 2,
-            icon: "hand.tap.fill",
-            title: "Open the File",
-            body: "On the receiving device, tap the .gladiator file when it arrives."
+        FirstLaunchTutorialStep(
+            title: "Analytics",
+            description: "The Analytics tab contains powerful tools to identify correlations, trends, and performance patterns in your data.",
+            tabIndex: 1
         ),
-        TutorialStep(
-            number: 3,
-            icon: "ellipsis.circle",
-            title: "Find More Options",
-            body: "iOS will show a list of apps that can open the file. If Gladiator is not visible, scroll right and tap More."
+        FirstLaunchTutorialStep(
+            title: "Sessions",
+            description: "Log your race sessions here. The more sessions you record, the more powerful your analytics become.",
+            tabIndex: 2
         ),
-        TutorialStep(
-            number: 4,
-            icon: "apps.iphone",
-            title: "Select Gladiator",
-            body: "Scroll through the list to find Gladiator and select it."
+        FirstLaunchTutorialStep(
+            title: "The Pit",
+            description: "The Pit is your personal space for notes, checklists, goals and reminders.",
+            tabIndex: 3
         ),
-        TutorialStep(
-            number: 5,
-            icon: "checkmark.circle.fill",
-            title: "Confirm Import",
-            body: "Gladiator will open and show a confirmation prompt to import the data."
-        ),
-        TutorialStep(
-            number: 6,
-            icon: "exclamationmark.triangle.fill",
-            title: "About Duplicates",
-            body: "Important: Duplicate sessions will not be excluded. If the receiving device already has some of the same sessions they will be imported again as duplicates."
+        FirstLaunchTutorialStep(
+            title: "Settings",
+            description: "In Settings, use Session Customization to manage your tracks, vehicles, and metrics.",
+            tabIndex: 4
         )
     ]
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Theme.background.ignoresSafeArea()
-
-                ScrollView {
-                    VStack(spacing: 14) {
-                        header
-                        ForEach(steps) { step in
-                            stepCard(step)
-                        }
-                    }
-                    .padding(20)
-                }
-            }
-            .navigationTitle("How to Share & Import")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .font(.system(size: 15, weight: .heavy))
-                        .foregroundColor(Theme.accent)
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-    }
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "arrow.up.doc.on.clipboard")
-                .font(.system(size: 14, weight: .heavy))
-                .foregroundColor(Theme.accent)
-            Text("TRANSFER YOUR DATA")
-                .font(.system(size: 11, weight: .heavy))
-                .tracking(2)
-                .foregroundColor(Theme.textSecondary)
-            Spacer()
-        }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
-    }
-
-    private func stepCard(_ step: TutorialStep) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            numberBadge(step.number)
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: step.icon)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Theme.accent)
-                    Text("STEP \(step.number)")
-                        .font(.system(size: 10, weight: .heavy))
-                        .tracking(1.5)
-                        .foregroundColor(Theme.accent)
-                }
-                Text(step.title)
-                    .font(.system(size: 16, weight: .heavy))
-                    .foregroundColor(Theme.textPrimary)
-                Text(step.body)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
-    }
-
-    private func numberBadge(_ number: Int) -> some View {
         ZStack {
-            Circle()
-                .fill(Theme.accent.opacity(0.15))
-                .frame(width: 44, height: 44)
-            Circle()
-                .stroke(Theme.accent.opacity(0.5), lineWidth: 1.5)
-                .frame(width: 44, height: 44)
-            Text("\(number)")
-                .font(.system(size: 18, weight: .heavy, design: .rounded))
-                .foregroundColor(Theme.accent)
+            switch stage {
+            case .welcome:
+                welcomeLayer
+                    .transition(.opacity)
+            case .step(let index):
+                stepOverlay(for: index)
+                    .transition(.opacity)
+            }
         }
+        .animation(.easeInOut(duration: 0.3), value: stage)
+    }
+
+    @ViewBuilder
+    private func stepOverlay(for index: Int) -> some View {
+        if let step = steps[safe: index] {
+            TutorialOverlayView(
+                title: step.title,
+                description: step.description,
+                tabIndex: step.tabIndex,
+                totalTabs: 5,
+                stepIndex: index,
+                totalSteps: steps.count,
+                isLastStep: index == steps.count - 1,
+                onNext: { advance() },
+                onSkip: { complete() }
+            )
+        }
+    }
+
+    private var welcomeLayer: some View {
+        ZStack {
+            Color.black.opacity(0.95).ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                welcomeTopBar
+                Spacer()
+                welcomeHero
+                Spacer()
+                welcomeActions
+            }
+        }
+    }
+
+    private var welcomeTopBar: some View {
+        HStack {
+            Spacer()
+            Button { complete() } label: {
+                Text("SKIP")
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 8)
+    }
+
+    private var welcomeHero: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "flag.checkered.2.crossed")
+                .font(.system(size: 52, weight: .bold))
+                .foregroundColor(Theme.accent)
+                .shadow(color: Theme.accent.opacity(0.5), radius: 16)
+
+            Text("GLADIATOR")
+                .font(.system(size: 32, weight: .heavy))
+                .tracking(6)
+                .foregroundColor(Theme.textPrimary)
+
+            VStack(spacing: 8) {
+                Text("Welcome to Gladiator")
+                    .font(.system(size: 20, weight: .heavy))
+                    .foregroundColor(Theme.textPrimary)
+                Text("Your personal racing analytics platform")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Text("QUICK TOUR — LESS THAN 30 SECONDS")
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textTertiary)
+                .padding(.top, 6)
+        }
+        .padding(.horizontal, 32)
+    }
+
+    private var welcomeActions: some View {
+        VStack(spacing: 10) {
+            Button { advance() } label: {
+                Text("LET'S GO")
+                    .font(.system(size: 14, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.background)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Capsule().fill(Theme.accent))
+                    .shadow(color: Theme.accent.opacity(0.5), radius: 14)
+            }
+            .buttonStyle(.plain)
+
+            Button { complete() } label: {
+                Text("Skip Tour")
+                    .font(.system(size: 13, weight: .heavy))
+                    .tracking(1)
+                    .foregroundColor(Theme.textSecondary)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 32)
+        .padding(.bottom, 32)
+    }
+
+    private func advance() {
+        switch stage {
+        case .welcome:
+            stage = .step(0)
+        case .step(let i):
+            if i + 1 >= steps.count {
+                complete()
+            } else {
+                stage = .step(i + 1)
+            }
+        }
+    }
+
+    private func complete() {
+        isPresented = false
     }
 }
 
-private struct TutorialStep: Identifiable {
-    let id = UUID()
-    let number: Int
-    let icon: String
+private struct FirstLaunchTutorialStep {
     let title: String
-    let body: String
+    let description: String
+    let tabIndex: Int
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
 }
 
 #Preview {
-    TutorialView()
+    TutorialView(isPresented: .constant(true))
         .preferredColorScheme(.dark)
 }
