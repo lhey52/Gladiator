@@ -7,6 +7,7 @@ import SwiftUI
 
 struct TutorialView: View {
     @Binding var isPresented: Bool
+    @Binding var selectedTab: Int
     @State private var stage: Stage = .welcome
 
     private enum Stage: Equatable {
@@ -167,17 +168,25 @@ struct TutorialView: View {
     private func advance() {
         switch stage {
         case .welcome:
-            stage = .step(0)
+            setStage(.step(0))
         case .step(let i):
             if i + 1 >= steps.count {
                 complete()
             } else {
-                stage = .step(i + 1)
+                setStage(.step(i + 1))
             }
         }
     }
 
+    private func setStage(_ newStage: Stage) {
+        stage = newStage
+        if case .step(let i) = newStage, let step = steps[safe: i] {
+            selectedTab = step.tabIndex
+        }
+    }
+
     private func complete() {
+        selectedTab = 0
         isPresented = false
     }
 }
@@ -195,6 +204,6 @@ private extension Array {
 }
 
 #Preview {
-    TutorialView(isPresented: .constant(true))
+    TutorialView(isPresented: .constant(true), selectedTab: .constant(0))
         .preferredColorScheme(.dark)
 }

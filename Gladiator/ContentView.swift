@@ -91,7 +91,7 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .overlay {
             if isShowingTutorial {
-                TutorialView(isPresented: $isShowingTutorial)
+                TutorialView(isPresented: $isShowingTutorial, selectedTab: $selection)
                     .transition(.opacity)
             }
         }

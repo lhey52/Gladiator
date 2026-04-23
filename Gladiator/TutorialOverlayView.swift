@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct TutorialOverlayView: View {
     let title: String
@@ -46,16 +47,30 @@ struct TutorialOverlayView: View {
     private func cutoutRect(in geo: GeometryProxy) -> CGRect {
         let tabWidth = geo.size.width / CGFloat(totalTabs)
         let centerX = tabWidth * CGFloat(tabIndex) + tabWidth / 2
-        let tabBarContentHeight: CGFloat = 49
-        let centerY = geo.size.height - geo.safeAreaInsets.bottom - tabBarContentHeight / 2
+        // Because this overlay uses .ignoresSafeArea, geo.safeAreaInsets returns zero.
+        // Read the real bottom inset from the key window — gives the home-indicator gap (0 or ~34pt).
+        let safeBottom = keyWindowBottomInset()
+        // The tab icon sits in the upper portion of the ~49pt bar content with the label beneath.
+        // Centering further down and making the cutout taller covers both icon and label cleanly.
+        let iconCenterFromBarBottom: CGFloat = 20
+        let centerY = geo.size.height - safeBottom - iconCenterFromBarBottom
         let cutoutWidth: CGFloat = min(tabWidth - 8, 90)
-        let cutoutHeight: CGFloat = 56
+        let cutoutHeight: CGFloat = 64
         return CGRect(
             x: centerX - cutoutWidth / 2,
             y: centerY - cutoutHeight / 2,
             width: cutoutWidth,
             height: cutoutHeight
         )
+    }
+
+    private func keyWindowBottomInset() -> CGFloat {
+        UIApplication.shared
+            .connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 34
     }
 
     private func skipButton(in geo: GeometryProxy) -> some View {
