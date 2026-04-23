@@ -15,6 +15,7 @@ struct AnalyticsView: View {
     private var fields: [CustomField]
     @ObservedObject private var iap = IAPManager.shared
     @AppStorage("aiInsightThreshold") private var insightThreshold: Int = 5
+    @AppStorage("aiInsightCollapsed") private var aiInsightCollapsed: Bool = false
 
     @State private var insightIndex: Int = 0
     @State private var showingPaywall: Bool = false
@@ -40,6 +41,7 @@ struct AnalyticsView: View {
                 ScrollView {
                     VStack(spacing: 14) {
                         aiInsightCard
+                        aiInsightCollapseToggle
 
                         Text("TOOLS")
                             .font(.system(size: 11, weight: .bold))
@@ -141,6 +143,28 @@ struct AnalyticsView: View {
         return insights[clamped].message
     }
 
+    private var aiInsightCollapseToggle: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                aiInsightCollapsed.toggle()
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(aiInsightCollapsed ? "SHOW" : "HIDE")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.2)
+                Image(systemName: aiInsightCollapsed ? "chevron.down" : "chevron.up")
+                    .font(.system(size: 10, weight: .heavy))
+            }
+            .foregroundColor(Theme.textTertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(aiInsightCollapsed ? "Expand AI Insight" : "Collapse AI Insight")
+    }
+
     private var aiInsightCard: some View {
         VStack(spacing: 14) {
             HStack(spacing: 8) {
@@ -154,6 +178,32 @@ struct AnalyticsView: View {
                 Spacer()
             }
 
+            if !aiInsightCollapsed {
+                aiInsightBody
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
+        )
+        .shadow(color: Theme.accent.opacity(0.18), radius: 18)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !iap.isProUser { showingPaywall = true }
+        }
+        .animation(.easeInOut(duration: 0.25), value: insightIndex)
+    }
+
+    @ViewBuilder
+    private var aiInsightBody: some View {
+        VStack(spacing: 14) {
             ZStack {
                 VStack(spacing: 10) {
                     Text(currentMessage)
@@ -203,22 +253,6 @@ struct AnalyticsView: View {
                 insightNavigationLocked
             }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
-        )
-        .shadow(color: Theme.accent.opacity(0.18), radius: 18)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if !iap.isProUser { showingPaywall = true }
-        }
-        .animation(.easeInOut(duration: 0.25), value: insightIndex)
     }
 
     private var insightNavigationPro: some View {
