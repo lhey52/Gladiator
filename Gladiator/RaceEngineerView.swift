@@ -462,8 +462,8 @@ private struct RaceEngineerResultCard: View {
         }
         text += "appear to have the greatest "
         if n == 1 { text += "influence on \(result.outcome)" }
-        else { text += "combined influence on \(result.outcome) — some pushing it higher, some lower, and some with mixed effects depending on setup conditions" }
-        text += ". The individual direction of each metric is broken out in the Contributors section below. Together they account for \(pct)% of the observed variation in \(result.outcome) across \(result.sampleSize) session\(result.sampleSize == 1 ? "" : "s")\(contextSuffix)."
+        else { text += "combined influence on \(result.outcome)" }
+        text += ". Together they account for \(pct)% of the observed variation in \(result.outcome) across \(result.sampleSize) session\(result.sampleSize == 1 ? "" : "s")\(contextSuffix)."
         if result.adjustedRSquared < 0.20 {
             text += " While this may seem low, even a small improvement in \(result.outcome) can provide a meaningful edge — and as more sessions are logged this figure may increase."
         }
@@ -489,6 +489,11 @@ private struct RaceEngineerResultCard: View {
                 .font(.system(size: 10, weight: .heavy))
                 .tracking(1.5)
                 .foregroundColor(Theme.accent)
+
+            Text("The following \(result.contributors.count) metric\(result.contributors.count == 1 ? "" : "s") \(result.contributors.count == 1 ? "was" : "were") isolated amongst a grouping of up to 15 combined metrics and returned the highest predictive power for \(result.outcome):")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
 
             ForEach(Array(result.contributors.enumerated()), id: \.element.id) { index, contributor in
                 contributorRow(contributor: contributor, isTop: index == 0)
@@ -649,6 +654,16 @@ private struct RaceEngineerResultCard: View {
                 .tracking(1.5)
                 .foregroundColor(Theme.accent)
 
+            Text("For best results adjust one metric at a time across sessions so you can isolate the effect of each change. Start with your highest contributing metric first.")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Continue logging sessions as normal to improve the model and refine these recommendations over time.")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
             ForEach(result.contributors) { contributor in
                 recommendationRow(contributor: contributor)
             }
@@ -708,13 +723,16 @@ private struct RaceEngineerResultCard: View {
         if !contributor.hasClearDirection || !contributor.topSessionsDiscriminate {
             let higherIsBetter = impliedHigherIsBetter(for: contributor)
             let directionWord = higherIsBetter ? "Higher" : "Lower"
-            return "\(directionWord) \(contributor.name) is associated with better \(result.outcome) in your data. Try adjusting from your current session average of \(formatValue(contributor.observedMean, contributor: contributor))\(unit) and observe the effect."
+            let actionVerb = higherIsBetter ? "raising" : "lowering"
+            return "\(directionWord) \(contributor.name) is associated with better \(result.outcome) in your data. Try \(actionVerb) from your current session average of \(formatValue(contributor.observedMean, contributor: contributor))\(unit) and observe the effect."
         }
 
         // Case 1 — Clear direction + informative top-session range.
         let rangeLow = formatValue(contributor.topSessionMin, contributor: contributor)
         let rangeHigh = formatValue(contributor.topSessionMax, contributor: contributor)
-        return "Target \(contributor.name) between \(rangeLow) and \(rangeHigh)\(unit) — this is the range seen in your \(contributor.topSessionCount) fastest session\(contributor.topSessionCount == 1 ? "" : "s")\(trackPhrase)."
+        let actionVerb = impliedHigherIsBetter(for: contributor) ? "raising" : "lowering"
+        let avg = formatValue(contributor.observedMean, contributor: contributor)
+        return "Target \(contributor.name) between \(rangeLow) and \(rangeHigh)\(unit) — this is the range seen in your \(contributor.topSessionCount) fastest session\(contributor.topSessionCount == 1 ? "" : "s")\(trackPhrase). Try \(actionVerb) from your current session average of \(avg)\(unit)."
     }
 
     private func impliedHigherIsBetter(for contributor: RaceEngineerContributor) -> Bool {
