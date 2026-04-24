@@ -6,16 +6,22 @@
 import SwiftUI
 import UIKit
 
+enum TutorialSpotlight: Hashable {
+    case tab(index: Int, total: Int)
+    case topRightPlusButton
+}
+
 struct TutorialOverlayView: View {
     let title: String
     let description: String
-    let tabIndex: Int
-    let totalTabs: Int
+    let spotlight: TutorialSpotlight
     let stepIndex: Int
     let totalSteps: Int
     let isLastStep: Bool
     let onNext: () -> Void
     let onSkip: () -> Void
+
+    @State private var arrowBounce: Bool = false
 
     var body: some View {
         GeometryReader { geo in
@@ -24,7 +30,7 @@ struct TutorialOverlayView: View {
                 SpotlightShape(cutoutRect: cutout, cornerRadius: 16)
                     .fill(Color.black.opacity(0.78), style: FillStyle(eoFill: true))
                     .ignoresSafeArea()
-                    .animation(.easeInOut(duration: 0.32), value: tabIndex)
+                    .animation(.easeInOut(duration: 0.32), value: spotlight)
 
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(Theme.accent.opacity(0.9), lineWidth: 2)
@@ -33,7 +39,14 @@ struct TutorialOverlayView: View {
                     .shadow(color: Theme.accent.opacity(0.7), radius: 14)
                     .shadow(color: Theme.accent.opacity(0.4), radius: 24)
                     .allowsHitTesting(false)
-                    .animation(.easeInOut(duration: 0.32), value: tabIndex)
+                    .animation(.easeInOut(duration: 0.32), value: spotlight)
+
+                if case .topRightPlusButton = spotlight {
+                    animatedArrow
+                        .position(x: cutout.midX, y: cutout.maxY + 44)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
 
                 skipButton(in: geo)
                 tooltipLayer(in: geo, cutout: cutout)
@@ -45,8 +58,17 @@ struct TutorialOverlayView: View {
     }
 
     private func cutoutRect(in geo: GeometryProxy) -> CGRect {
-        let tabWidth = geo.size.width / CGFloat(totalTabs)
-        let centerX = tabWidth * CGFloat(tabIndex) + tabWidth / 2
+        switch spotlight {
+        case .tab(let index, let total):
+            return tabCutout(in: geo, index: index, total: total)
+        case .topRightPlusButton:
+            return plusButtonCutout(in: geo)
+        }
+    }
+
+    private func tabCutout(in geo: GeometryProxy, index: Int, total: Int) -> CGRect {
+        let tabWidth = geo.size.width / CGFloat(total)
+        let centerX = tabWidth * CGFloat(index) + tabWidth / 2
         // Because this overlay uses .ignoresSafeArea, geo.safeAreaInsets returns zero.
         // Read the real bottom inset from the key window — gives the home-indicator gap (0 or ~34pt).
         let safeBottom = keyWindowBottomInset()
@@ -64,6 +86,23 @@ struct TutorialOverlayView: View {
         )
     }
 
+    private func plusButtonCutout(in geo: GeometryProxy) -> CGRect {
+        let safeTop = keyWindowTopInset()
+        // Inline-title nav bar height is 44pt; primary-action item sits centered vertically.
+        let navBarHeight: CGFloat = 44
+        let iconCenterFromRight: CGFloat = 28
+        let centerX = geo.size.width - iconCenterFromRight
+        let centerY = safeTop + navBarHeight / 2
+        let cutoutWidth: CGFloat = 52
+        let cutoutHeight: CGFloat = 44
+        return CGRect(
+            x: centerX - cutoutWidth / 2,
+            y: centerY - cutoutHeight / 2,
+            width: cutoutWidth,
+            height: cutoutHeight
+        )
+    }
+
     private func keyWindowBottomInset() -> CGFloat {
         UIApplication.shared
             .connectedScenes
@@ -71,6 +110,30 @@ struct TutorialOverlayView: View {
             .flatMap(\.windows)
             .first(where: \.isKeyWindow)?
             .safeAreaInsets.bottom ?? 34
+    }
+
+    private func keyWindowTopInset() -> CGFloat {
+        UIApplication.shared
+            .connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.top ?? 47
+    }
+
+    private var animatedArrow: some View {
+        Image(systemName: "arrow.up")
+            .font(.system(size: 34, weight: .heavy))
+            .foregroundColor(Theme.accent)
+            .shadow(color: Theme.accent.opacity(0.7), radius: 10)
+            .shadow(color: Theme.accent.opacity(0.4), radius: 18)
+            .offset(y: arrowBounce ? -6 : 6)
+            .scaleEffect(arrowBounce ? 1.08 : 0.94)
+            .animation(
+                .easeInOut(duration: 0.65).repeatForever(autoreverses: true),
+                value: arrowBounce
+            )
+            .onAppear { arrowBounce = true }
     }
 
     private func skipButton(in geo: GeometryProxy) -> some View {
@@ -92,20 +155,44 @@ struct TutorialOverlayView: View {
         }
         .padding(.top, geo.safeAreaInsets.top + 8)
         .padding(.trailing, 12)
+        // Hide the top-right Skip button while the plus-button spotlight is active
+        // so it doesn't overlap the highlighted area.
+        .opacity(spotlight == .topRightPlusButton ? 0 : 1)
+        .allowsHitTesting(spotlight != .topRightPlusButton)
     }
 
+    @ViewBuilder
     private func tooltipLayer(in geo: GeometryProxy, cutout: CGRect) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: geo.safeAreaInsets.top + 60)
-            tooltipCard
-                .padding(.horizontal, 24)
-                .id(stepIndex)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
-            Color.clear
-                .frame(height: geo.size.height - cutout.minY + 22)
+        let cutoutIsAtTop = cutout.midY < geo.size.height / 2
+        if cutoutIsAtTop {
+            VStack(spacing: 0) {
+                Color.clear
+                    .frame(height: cutout.maxY + 96)
+                tooltipCard
+                    .padding(.horizontal, 24)
+                    .id(tooltipId)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                Spacer(minLength: 24)
+            }
+            .frame(width: geo.size.width)
+            .animation(.easeInOut(duration: 0.28), value: tooltipId)
+        } else {
+            VStack(spacing: 0) {
+                Spacer(minLength: geo.safeAreaInsets.top + 60)
+                tooltipCard
+                    .padding(.horizontal, 24)
+                    .id(tooltipId)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                Color.clear
+                    .frame(height: geo.size.height - cutout.minY + 22)
+            }
+            .frame(width: geo.size.width)
+            .animation(.easeInOut(duration: 0.28), value: tooltipId)
         }
-        .frame(width: geo.size.width)
-        .animation(.easeInOut(duration: 0.28), value: stepIndex)
+    }
+
+    private var tooltipId: String {
+        "\(stepIndex)-\(spotlight)"
     }
 
     private var tooltipCard: some View {
@@ -201,8 +288,7 @@ private struct SpotlightShape: Shape {
     TutorialOverlayView(
         title: "Dashboard",
         description: "Your Dashboard gives you a live overview of your racing data, recent sessions, and AI insights.",
-        tabIndex: 0,
-        totalTabs: 5,
+        spotlight: .tab(index: 0, total: 5),
         stepIndex: 0,
         totalSteps: 5,
         isLastStep: false,
