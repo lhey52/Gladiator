@@ -114,6 +114,14 @@ struct AnalyticsView: View {
                         ) {
                             PerformancePredictorView()
                         }
+
+                        AnalyticsCard(
+                            icon: "wand.and.stars",
+                            title: "Race Engineer",
+                            description: "Automatically identify your most influential setup metrics and get actionable targets"
+                        ) {
+                            RaceEngineerView()
+                        }
                     }
                     .padding(20)
                     .padding(.top, 4)
