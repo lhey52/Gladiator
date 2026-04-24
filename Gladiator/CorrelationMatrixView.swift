@@ -506,13 +506,11 @@ private struct CorrelationPairDetailView: View {
         VStack(alignment: .leading, spacing: 20) {
             rValueSection
             Divider().background(Theme.hairline)
-            HStack {
-                strengthSection
-                Spacer()
-                confidenceBadge
-            }
+            strengthSection
             Divider().background(Theme.hairline)
             insightSection
+            Divider().background(Theme.hairline)
+            dataSufficiencySection
             sampleSection
         }
         .padding(20)
@@ -539,41 +537,65 @@ private struct CorrelationPairDetailView: View {
     }
 
     private var strengthSection: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(result.strength.color)
-                .frame(width: 10, height: 10)
-                .shadow(color: result.strength.color.opacity(0.5), radius: 4)
-            Text(result.strength.label.uppercased())
-                .font(.system(size: 12, weight: .heavy))
-                .tracking(1)
-                .foregroundColor(result.strength.color)
-        }
-    }
-
-    private var confidenceBadge: some View {
-        HStack(spacing: 5) {
-            Image(systemName: result.confidence.systemImage)
-                .font(.system(size: 11, weight: .bold))
-            Text(result.confidence.label.uppercased())
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1)
-        }
-        .foregroundColor(result.confidence.color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Capsule().fill(result.confidence.color.opacity(0.12)))
-        .overlay(Capsule().stroke(result.confidence.color.opacity(0.4), lineWidth: 1))
-    }
-
-    private var insightSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("INSIGHT", systemImage: "lightbulb.fill")
+            Text("STRENGTH & DIRECTION")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(result.strength.color)
+                    .frame(width: 10, height: 10)
+                    .shadow(color: result.strength.color.opacity(0.5), radius: 4)
+                Text(result.strength.label.uppercased())
+                    .font(.system(size: 12, weight: .heavy))
+                    .tracking(1)
+                    .foregroundColor(result.strength.color)
+            }
+        }
+    }
+
+    private var dataSufficiencySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("DATA SUFFICIENCY", systemImage: "square.stack.3d.up.fill")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.5)
                 .foregroundColor(Theme.accent)
-            Text(result.insight)
-                .font(.system(size: 15, weight: .semibold))
+
+            DataSufficiencyBadge(level: result.dataSufficiency)
+
+            Text(result.dataSufficiency.description(sampleSize: result.sampleSize))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var insightSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label("GLADIATOR AI", systemImage: "lightbulb.fill")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundColor(Theme.accent)
+
+            Text(result.finding)
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            insightParagraph(heading: "WHAT IT MEANS", text: result.meaning)
+            insightParagraph(heading: "WHAT TO DO", text: result.recommendation)
+        }
+    }
+
+    private func insightParagraph(heading: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(heading)
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            Text(text)
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }

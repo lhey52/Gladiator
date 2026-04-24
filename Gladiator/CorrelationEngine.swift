@@ -5,85 +5,95 @@
 
 import SwiftUI
 
-enum CorrelationConfidence {
-    case low
-    case moderate
-    case high
-
-    var label: String {
-        switch self {
-        case .low: return "Low Confidence"
-        case .moderate: return "Moderate Confidence"
-        case .high: return "High Confidence"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .low: return Theme.textSecondary
-        case .moderate: return Theme.accent.opacity(0.7)
-        case .high: return Theme.accent
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .low: return "shield.lefthalf.filled"
-        case .moderate: return "shield.checkered"
-        case .high: return "shield.fill"
-        }
-    }
-
-    static func from(sampleSize: Int) -> CorrelationConfidence {
-        switch sampleSize {
-        case 31...: return .high
-        case 11...30: return .moderate
-        default: return .low
-        }
-    }
-}
-
 struct CorrelationResult {
     let fieldA: String
     let fieldB: String
     let r: Double
     let sampleSize: Int
     let strength: CorrelationStrength
-    let confidence: CorrelationConfidence
+    let dataSufficiency: DataSufficiencyLevel
+    // Unique, non-empty track/vehicle names from the sessions that contributed to this calculation.
+    // Used by the finding sentence to describe the sample's context.
+    let tracks: [String]
+    let vehicles: [String]
 
-    var insight: String {
+    // Three-part insight used by the Correlation Analysis view.
+
+    var finding: String {
         let a = fieldA
         let b = fieldB
-        let prefix = "Based on \(sampleSize) sessions (\(confidence.label)), "
-        let suffix: String
-        switch confidence {
-        case .low: suffix = " Record more sessions to improve accuracy."
-        case .moderate: suffix = ""
-        case .high: suffix = ""
-        }
-
-        let core: String
+        let ctx = contextSuffix
         switch strength {
         case .veryStrongPositive:
-            core = "higher values of \(a) show a very strong correlation with higher values of \(b)."
+            return "Higher \(a) shows a very strong positive correlation with \(b)\(ctx)."
         case .strongPositive:
-            core = "higher values of \(a) show a strong correlation with higher values of \(b)."
+            return "Higher \(a) shows a strong positive correlation with \(b)\(ctx)."
         case .moderatePositive:
-            core = "higher values of \(a) show a moderate correlation with higher values of \(b)."
+            return "Higher \(a) shows a moderate positive correlation with \(b)\(ctx)."
         case .weakPositive:
-            core = "higher values of \(a) show a weak correlation with higher values of \(b)."
+            return "Higher \(a) shows a weak positive correlation with \(b)\(ctx)."
         case .none:
-            core = "no meaningful pattern was identified between \(a) and \(b)."
+            return "\(a) shows no meaningful correlation with \(b)\(ctx)."
         case .weakNegative:
-            core = "higher values of \(a) show a weak correlation with lower values of \(b)."
+            return "Higher \(a) shows a weak negative correlation with \(b)\(ctx)."
         case .moderateNegative:
-            core = "higher values of \(a) show a moderate correlation with lower values of \(b)."
+            return "Higher \(a) shows a moderate negative correlation with \(b)\(ctx)."
         case .strongNegative:
-            core = "higher values of \(a) show a strong correlation with lower values of \(b)."
+            return "Higher \(a) shows a strong negative correlation with \(b)\(ctx)."
         case .veryStrongNegative:
-            core = "higher values of \(a) show a very strong correlation with lower values of \(b)."
+            return "Higher \(a) shows a very strong negative correlation with \(b)\(ctx)."
         }
-        return prefix + core + suffix
+    }
+
+    var meaning: String {
+        let a = fieldA
+        let b = fieldB
+        switch strength {
+        case .veryStrongPositive:
+            return "This means \(a) and \(b) move closely together in your data — as one increases the other consistently increases too."
+        case .strongPositive:
+            return "This suggests \(a) and \(b) tend to move together, though not perfectly consistently."
+        case .moderatePositive:
+            return "There is a moderate tendency for \(a) and \(b) to move in the same direction, but with notable exceptions."
+        case .weakPositive:
+            return "There is a slight tendency for these metrics to move together, but the relationship is inconsistent."
+        case .none:
+            return "These two metrics show no meaningful relationship in your data — changes in one do not appear to influence the other."
+        case .weakNegative:
+            return "There is a slight tendency for these metrics to move in opposite directions, but the relationship is inconsistent."
+        case .moderateNegative:
+            return "There is a moderate tendency for these metrics to move in opposite directions, though with notable exceptions."
+        case .strongNegative:
+            return "This suggests that as \(a) increases, \(b) tends to decrease, though not perfectly consistently."
+        case .veryStrongNegative:
+            return "This means as \(a) increases, \(b) consistently decreases in your data."
+        }
+    }
+
+    var recommendation: String {
+        let a = fieldA
+        let b = fieldB
+        switch strength {
+        case .veryStrongPositive, .strongPositive, .veryStrongNegative, .strongNegative:
+            return "This is a strong signal worth investigating — \(a) may have a meaningful influence on \(b) in your setup."
+        case .moderatePositive, .moderateNegative:
+            return "This relationship is worth monitoring as you log more sessions to see if it strengthens."
+        case .weakPositive, .weakNegative:
+            return "\(a) is unlikely to be a primary driver of \(b). Consider tracking other setup variables."
+        case .none:
+            return "Focus your analysis on other metric combinations that may show stronger relationships."
+        }
+    }
+
+    private var contextSuffix: String {
+        var text = " across \(sampleSize) session\(sampleSize == 1 ? "" : "s")"
+        if tracks.count == 1, let track = tracks.first, !track.isEmpty {
+            text += " at \(track)"
+        }
+        if vehicles.count == 1, let vehicle = vehicles.first, !vehicle.isEmpty {
+            text += " in \(vehicle)"
+        }
+        return text
     }
 }
 
@@ -142,11 +152,14 @@ enum CorrelationStrength {
 }
 
 enum CorrelationEngine {
-    static let minimumSessions = 5
+    // Aligned with Performance Predictor's Bad-tier floor (10 sessions).
+    static let minimumSessions = 10
 
     static func calculate(sessions: [Session], fieldA: String, fieldB: String) -> CorrelationResult {
         var xs: [Double] = []
         var ys: [Double] = []
+        var trackSet: Set<String> = []
+        var vehicleSet: Set<String> = []
 
         for session in sessions {
             guard let aVal = session.fieldValues.first(where: { $0.fieldName == fieldA }),
@@ -155,14 +168,19 @@ enum CorrelationEngine {
                   let y = Double(bVal.value) else { continue }
             xs.append(x)
             ys.append(y)
+            if !session.trackName.isEmpty { trackSet.insert(session.trackName) }
+            if !session.vehicleName.isEmpty { vehicleSet.insert(session.vehicleName) }
         }
 
+        let tracks = trackSet.sorted()
+        let vehicles = vehicleSet.sorted()
         let n = xs.count
         guard n >= 2 else {
             return CorrelationResult(
                 fieldA: fieldA, fieldB: fieldB, r: 0,
                 sampleSize: n, strength: .none,
-                confidence: .low
+                dataSufficiency: DataSufficiencyLevel.from(sampleSize: n),
+                tracks: tracks, vehicles: vehicles
             )
         }
 
@@ -174,7 +192,9 @@ enum CorrelationEngine {
             r: clamped,
             sampleSize: n,
             strength: CorrelationStrength.from(r: clamped),
-            confidence: CorrelationConfidence.from(sampleSize: n)
+            dataSufficiency: DataSufficiencyLevel.from(sampleSize: n),
+            tracks: tracks,
+            vehicles: vehicles
         )
     }
 

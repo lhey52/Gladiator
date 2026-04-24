@@ -233,7 +233,7 @@ struct CorrelationView: View {
                 .font(.system(size: 14, weight: .heavy))
                 .tracking(2)
                 .foregroundColor(Theme.textPrimary)
-            Text("At least \(CorrelationEngine.minimumSessions) sessions with both fields recorded are needed for a reliable correlation. Currently \(count).")
+            Text("At least \(CorrelationEngine.minimumSessions) sessions with both fields recorded are needed before a correlation can be analyzed. Currently \(count).")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -249,13 +249,11 @@ struct CorrelationView: View {
         VStack(alignment: .leading, spacing: 20) {
             rValueSection(result)
             Divider().background(Theme.hairline)
-            HStack {
-                strengthSection(result)
-                Spacer()
-                confidenceBadge(result.confidence)
-            }
+            strengthSection(result)
             Divider().background(Theme.hairline)
             insightSection(result)
+            Divider().background(Theme.hairline)
+            dataSufficiencySection(result)
             sampleSection(result)
         }
         .padding(20)
@@ -309,45 +307,65 @@ struct CorrelationView: View {
     }
 
     private func strengthSection(_ result: CorrelationResult) -> some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(result.strength.color)
-                .frame(width: 10, height: 10)
-                .shadow(color: result.strength.color.opacity(0.5), radius: 4)
-            Text(result.strength.label.uppercased())
-                .font(.system(size: 12, weight: .heavy))
-                .tracking(1)
-                .foregroundColor(result.strength.color)
-        }
-    }
-
-    private func confidenceBadge(_ confidence: CorrelationConfidence) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: confidence.systemImage)
-                .font(.system(size: 11, weight: .bold))
-            Text(confidence.label.uppercased())
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1)
-        }
-        .foregroundColor(confidence.color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            Capsule().fill(confidence.color.opacity(0.12))
-        )
-        .overlay(
-            Capsule().stroke(confidence.color.opacity(0.4), lineWidth: 1)
-        )
-    }
-
-    private func insightSection(_ result: CorrelationResult) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("INSIGHT", systemImage: "lightbulb.fill")
+            Text("STRENGTH & DIRECTION")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(result.strength.color)
+                    .frame(width: 10, height: 10)
+                    .shadow(color: result.strength.color.opacity(0.5), radius: 4)
+                Text(result.strength.label.uppercased())
+                    .font(.system(size: 12, weight: .heavy))
+                    .tracking(1)
+                    .foregroundColor(result.strength.color)
+            }
+        }
+    }
+
+    private func dataSufficiencySection(_ result: CorrelationResult) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("DATA SUFFICIENCY", systemImage: "square.stack.3d.up.fill")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.5)
                 .foregroundColor(Theme.accent)
-            Text(result.insight)
-                .font(.system(size: 15, weight: .semibold))
+
+            DataSufficiencyBadge(level: result.dataSufficiency)
+
+            Text(result.dataSufficiency.description(sampleSize: result.sampleSize))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func insightSection(_ result: CorrelationResult) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label("GLADIATOR AI", systemImage: "lightbulb.fill")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundColor(Theme.accent)
+
+            Text(result.finding)
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            insightParagraph(heading: "WHAT IT MEANS", text: result.meaning)
+            insightParagraph(heading: "WHAT TO DO", text: result.recommendation)
+        }
+    }
+
+    private func insightParagraph(heading: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(heading)
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            Text(text)
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }

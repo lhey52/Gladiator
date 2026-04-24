@@ -687,10 +687,6 @@ struct PerformancePredictorView: View {
 private struct ResultCard: View {
     let result: PredictiveAnalysisResult
 
-    private var powerLevel: PredictivePowerLevel {
-        PredictivePowerLevel.from(adjustedRSquared: result.adjustedRSquared)
-    }
-
     private var adjustedRSquaredPercent: Int {
         Int((result.adjustedRSquared * 100).rounded())
     }
@@ -704,6 +700,8 @@ private struct ResultCard: View {
             contributionSection
             Divider().background(Theme.hairline)
             summarySection
+            Divider().background(Theme.hairline)
+            dataSufficiencySection
             sampleSection
         }
         .padding(20)
@@ -720,14 +718,10 @@ private struct ResultCard: View {
 
     private var predictivePowerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("ADJUSTED PREDICTIVE POWER")
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(1.5)
-                    .foregroundColor(Theme.textSecondary)
-                Spacer(minLength: 8)
-                ConfidenceBadge(level: result.confidence)
-            }
+            Text("ADJUSTED PREDICTIVE POWER")
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
             HStack(alignment: .lastTextBaseline, spacing: 6) {
                 Text("\(adjustedRSquaredPercent)")
                     .font(.system(size: 56, weight: .heavy, design: .rounded))
@@ -744,15 +738,21 @@ private struct ResultCard: View {
     }
 
     private var headlineSection: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(Theme.accent)
-                .frame(width: 10, height: 10)
-                .shadow(color: Theme.accent.opacity(0.5), radius: 4)
-            Text(powerLevel.headline(outcome: result.outcome))
-                .font(.system(size: 14, weight: .heavy))
-                .foregroundColor(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("PREDICTIVE STRENGTH")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(Theme.accent)
+                    .frame(width: 10, height: 10)
+                    .shadow(color: Theme.accent.opacity(0.5), radius: 4)
+                Text(result.powerLevel.headline(outcome: result.outcome))
+                    .font(.system(size: 14, weight: .heavy))
+                    .foregroundColor(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -801,13 +801,49 @@ private struct ResultCard: View {
     }
 
     private var summarySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("SUMMARY", systemImage: "text.alignleft")
-                .font(.system(size: 10, weight: .heavy))
+        VStack(alignment: .leading, spacing: 16) {
+            Label("GLADIATOR AI", systemImage: "lightbulb.fill")
+                .font(.system(size: 10, weight: .bold))
                 .tracking(1.5)
                 .foregroundColor(Theme.accent)
-            Text(RegressionEngine.plainEnglishSummary(result: result))
-                .font(.system(size: 15, weight: .semibold))
+
+            Text(result.finding)
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            insightParagraph(heading: "WHAT IT MEANS", text: result.meaning)
+            insightParagraph(heading: "WHAT TO DO", text: result.recommendation)
+        }
+    }
+
+    private var dataSufficiencySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("DATA SUFFICIENCY", systemImage: "square.stack.3d.up.fill")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundColor(Theme.accent)
+
+            DataSufficiencyBadge(level: result.dataSufficiency)
+
+            Text(result.dataSufficiency.description(
+                sampleSize: result.sampleSize,
+                predictorCount: result.predictors.count
+            ))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func insightParagraph(heading: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(heading)
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            Text(text)
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -905,40 +941,6 @@ private struct FieldPickerSheet: View {
                 }
                 .padding(20)
             }
-        }
-    }
-}
-
-// MARK: - Confidence badge
-
-private struct ConfidenceBadge: View {
-    let level: ConfidenceLevel
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-                .shadow(color: color.opacity(0.5), radius: 3)
-            Text(level.displayName.uppercased())
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1)
-                .foregroundColor(color)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Capsule().fill(color.opacity(0.12)))
-        .overlay(Capsule().stroke(color.opacity(0.45), lineWidth: 1))
-    }
-
-    private var color: Color {
-        switch level {
-        case .veryLow: return Theme.danger
-        case .low: return Theme.textTertiary
-        case .moderate: return Theme.warning
-        case .high: return Theme.accent
-        case .veryHigh: return Theme.success
         }
     }
 }

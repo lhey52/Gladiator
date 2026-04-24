@@ -171,7 +171,7 @@ struct AnalyticsView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(Theme.accent)
-                Text("AI INSIGHT (BETA)")
+                Text("GLADIATOR AI (BETA)")
                     .font(.system(size: 13, weight: .heavy))
                     .tracking(2)
                     .foregroundColor(Theme.accent)

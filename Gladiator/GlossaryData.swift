@@ -32,9 +32,9 @@ enum GlossaryData {
                     definition: "The specific formula used to calculate correlation in Gladiator. It measures the linear relationship between two sets of values. An r value close to +1 or -1 indicates a strong linear relationship, while a value near 0 suggests little to no linear relationship."
                 ),
                 GlossaryChild(
-                    id: "confidence",
-                    name: "Confidence Level",
-                    definition: "An indicator of how reliable a correlation result is based on sample size. Low Confidence (5–10 sessions) means the result may shift significantly as more data is collected. Moderate Confidence (11–30 sessions) is more stable. High Confidence (31+ sessions) provides the most reliable results."
+                    id: "data-sufficiency",
+                    name: "Data Sufficiency",
+                    definition: "A five-tier rating — Bad, Poor, Fair, Good, Excellent — indicating how well your sample size supports a correlation result. Thresholds are shared with Performance Predictor so a given sample size carries the same meaning across both tools. 10-19 sessions → Bad, results are unlikely to be reliable and could be skewed by a few unusual sessions. 20-29 → Poor, an early indication only — not yet actionable. 30-49 → Fair, a reasonable foundation, directionally useful but may shift. 50-99 → Good, a solid foundation, reliable enough to act on. 100+ → Excellent, meets the ideal threshold and can be acted on with confidence. Below 10 sessions with both metrics recorded, Correlation Analysis does not produce a result."
                 )
             ],
             seeAlso: ["Scatter Plot", "Trend Analysis"]
@@ -129,9 +129,9 @@ enum GlossaryData {
                     definition: "The headline percentage shown in the Performance Predictor result. It is calculated as Adjusted R-Squared, a corrected form of R-Squared (the coefficient of determination) that discounts the score for each additional predictor. The number answers: of all the variation in your outcome across sessions, how much is explained by your selected predictors together? 0% means the predictors explain none of the variation; 100% means they explain all of it. The adjustment prevents a misleadingly high score from simply stacking more predictors, so a higher Predictive Power reflects a stronger, more parsimonious relationship. A lower value does not mean the tool is broken — it means untracked factors also influence the outcome."
                 ),
                 GlossaryChild(
-                    id: "confidence-level",
-                    name: "Confidence Level",
-                    definition: "A five-tier rating — Very Low, Low, Moderate, High, Very High — indicating how well your sample size supports the model. It is based on sessions per predictor (total qualifying sessions divided by the number of predictors). The lower thresholds are drawn from published rules of thumb: a minimum of 10 sessions per predictor (Stevens 1992) and a recommended threshold of 20 per predictor (Hair et al 2010). The upper thresholds (50 and 100 per predictor) reflect broader statistical consensus on what constitutes well-supported and ideally-supported multiple regression. 10-19 per predictor → Very Low. 20-29 → Low. 30-49 → Moderate. 50-99 → High. 100+ → Very High."
+                    id: "data-sufficiency",
+                    name: "Data Sufficiency",
+                    definition: "A five-tier rating — Bad, Poor, Fair, Good, Excellent — indicating how well your sample size supports the model. It is based on sessions per predictor (total qualifying sessions divided by the number of predictors). The lower thresholds are drawn from published rules of thumb: a minimum of 10 sessions per predictor (Stevens 1992) and a recommended threshold of 20 per predictor (Hair et al 2010). The upper thresholds (50 and 100 per predictor) reflect broader statistical consensus on what constitutes well-supported and ideally-supported multiple regression. 10-19 per predictor → Bad, results are unlikely to be reliable and could be skewed by a few unusual sessions. 20-29 → Poor, an early indication only — not yet actionable. 30-49 → Fair, a reasonable foundation, directionally useful but may shift. 50-99 → Good, a solid foundation, reliable enough to act on. 100+ → Excellent, meets the ideal threshold and can be acted on with confidence."
                 ),
                 GlossaryChild(
                     id: "model-reliability",
