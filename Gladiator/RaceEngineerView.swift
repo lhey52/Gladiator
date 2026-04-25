@@ -722,10 +722,22 @@ private struct RaceEngineerResultCard: View {
             }
 
             if isRecommendationsExpanded {
-                Text("For best results adjust one metric at a time across sessions so you can isolate the effect of each change. Start with your highest contributing metric first.")
+                Text(recommendationsPreambleText)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(Theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                Text(recommendationsModeIntroText)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if showsAdjustOneAtATimeIntro {
+                    Text("For best results adjust one metric at a time across sessions so you can isolate the effect of each change. Start with your highest contributing metric first.")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 Text("Continue logging sessions as normal to improve the model and refine these recommendations over time.")
                     .font(.system(size: 14, weight: .semibold))
@@ -756,16 +768,64 @@ private struct RaceEngineerResultCard: View {
     }
 
     private func recommendationRow(contributor: RaceEngineerContributor) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(contributor.name.uppercased())
-                .font(.system(size: 12, weight: .heavy))
-                .tracking(1)
-                .foregroundColor(Theme.textPrimary)
+        let isPrimary: Bool = {
+            if case .dominant(let topName) = recommendationMode { return contributor.name == topName }
+            return false
+        }()
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(contributor.name.uppercased())
+                    .font(.system(size: 12, weight: .heavy))
+                    .tracking(1)
+                    .foregroundColor(Theme.textPrimary)
+                if isPrimary {
+                    Text("PRIMARY")
+                        .font(.system(size: 9, weight: .heavy))
+                        .tracking(1.2)
+                        .foregroundColor(Theme.accent)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Theme.accent.opacity(0.15)))
+                        .overlay(Capsule().stroke(Theme.accent.opacity(0.5), lineWidth: 1))
+                }
+                Spacer()
+            }
 
             Text(recommendationText(for: contributor))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let proportional = proportionalAdjustmentText(for: contributor) {
+                Text(proportional)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let caution = elasticityCautionText(for: contributor) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundColor(Theme.warning)
+                        .padding(.top, 2)
+                    Text(caution)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Theme.warning.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Theme.warning.opacity(0.35), lineWidth: 1)
+                )
+            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -787,9 +847,17 @@ private struct RaceEngineerResultCard: View {
             return "Not enough variation in \(contributor.name) across your sessions to make a specific recommendation. Try deliberately varying this value across your next few sessions."
         }
 
-        // Case 2 — Direction is present but top-session range doesn't discriminate
-        // enough from the overall range to be actionable.
-        if !contributor.hasClearDirection || !contributor.topSessionsDiscriminate {
+        // Case 2b — Direction is uncertain. β* is effectively zero, so the
+        // model has no reliable sign for this predictor. Giving raise/lower
+        // advice off a near-zero coefficient is reading noise, so ask the
+        // driver to vary deliberately instead.
+        if !contributor.hasClearDirection {
+            return "Direction is uncertain for \(contributor.name) in your current data — it does not show a clear association with \(result.outcome). Vary this value deliberately across your next sessions and observe the effect before committing to a direction."
+        }
+
+        // Case 2a — Direction is clear but top-session range doesn't
+        // discriminate enough from the overall range to be actionable.
+        if !contributor.topSessionsDiscriminate {
             let higherIsBetter = impliedHigherIsBetter(for: contributor)
             let directionWord = higherIsBetter ? "Higher" : "Lower"
             let actionVerb = higherIsBetter ? "raising" : "lowering"
@@ -812,6 +880,142 @@ private struct RaceEngineerResultCard: View {
         case .number: return !pushesOutcomeDown
         case .text: return !pushesOutcomeDown
         }
+    }
+
+    // MARK: - Recommendation mode
+
+    // Recommendation mode is decided by comparing |β| (standardized
+    // coefficients) of the predictors. If the largest |β| dwarfs the second
+    // largest by 2x or more, one metric is the dominant lever; otherwise the
+    // metrics are roughly co-equal and changes should be made proportionally
+    // to avoid unbalancing the relationship.
+    private enum RecommendationMode: Equatable {
+        case dominant(topName: String)
+        case weightedMix(referenceName: String)
+    }
+
+    // Magnitude floor (|β*|) below which a predictor is too weak to call
+    // "dominant" even if it happens to exceed the next predictor by 2×.
+    // β* ≈ 0.15 sits between conventional small (0.10) and medium (0.30)
+    // standardized effect thresholds — large enough to be a real signal,
+    // small enough not to gate plausible recommendations.
+    private static let dominanceMagnitudeFloor: Double = 0.15
+
+    private var recommendationMode: RecommendationMode {
+        // result.contributors is sorted by sharePercent (= |β| / sum|β|), so
+        // the first entry has the largest absolute β.
+        guard let top = result.contributors.first else {
+            return .weightedMix(referenceName: "")
+        }
+        if result.contributors.count == 1 {
+            return .dominant(topName: top.name)
+        }
+        let topAbs = abs(top.standardizedCoefficient)
+        let secondAbs = abs(result.contributors[1].standardizedCoefficient)
+        // Two conditions required to declare a dominant driver:
+        //   (1) the top |β*| outpaces the second by at least 2×, AND
+        //   (2) the top |β*| itself clears the magnitude floor — otherwise
+        //       a 2× ratio between two near-zero coefficients can fire on
+        //       sampling noise alone.
+        let outpacesSecond = secondAbs > 1e-9 && topAbs >= 2 * secondAbs
+        if outpacesSecond && topAbs >= Self.dominanceMagnitudeFloor {
+            return .dominant(topName: top.name)
+        }
+        return .weightedMix(referenceName: top.name)
+    }
+
+    private var recommendationsPreambleText: String {
+        let n = result.contributors.count
+        let was = n == 1 ? "was" : "were"
+        let s = n == 1 ? "" : "s"
+        return "The following \(n) metric\(s) \(was) isolated amongst a grouping of up to 15 combined metrics and returned the highest predictive power for \(result.outcome)."
+    }
+
+    private var recommendationsModeIntroText: String {
+        switch recommendationMode {
+        case .dominant(let topName):
+            return "Your data identifies \(topName) as the dominant influence in this model — its effect is significantly larger than the other metrics. Focus your adjustment here first for the most direct impact on \(result.outcome)."
+        case .weightedMix:
+            return "Your metrics show similar levels of influence on \(result.outcome). Consider adjusting them proportionally rather than focusing on one — changing only one may unbalance the relationship between them."
+        }
+    }
+
+    // The "adjust one metric at a time, start with highest first" line aligns
+    // with the dominant-driver advice but directly contradicts the weighted
+    // mix advice, so it's only kept in dominant mode.
+    private var showsAdjustOneAtATimeIntro: Bool {
+        if case .dominant = recommendationMode { return true }
+        return false
+    }
+
+    private func proportionalAdjustmentText(for contributor: RaceEngineerContributor) -> String? {
+        guard case .weightedMix(let referenceName) = recommendationMode else { return nil }
+        guard contributor.name != referenceName else { return nil }
+        guard let reference = result.contributors.first(where: { $0.name == referenceName }) else { return nil }
+
+        // The exchange rate must live in raw-unit space, not standardized
+        // space. β* is dimensionless leverage-per-SD, so |β*_a / β*_b| is not
+        // a unit-for-unit ratio. The raw coefficients bᵢ = β*ᵢ × (SD_y / SD_xᵢ)
+        // carry units of [outcome-units / predictor-units], so |b_ref / b_this|
+        // is the number of `this` units whose outcome contribution matches
+        // a 1-unit change in `reference`.
+        let refRaw = reference.rawCoefficient
+        let thisRaw = contributor.rawCoefficient
+        guard abs(refRaw) > 1e-9, abs(thisRaw) > 1e-9 else { return nil }
+        let ratio = abs(refRaw / thisRaw)
+        // Skip when the two metrics live on scales that are too disparate for
+        // the ratio to be actionable on a setup sheet.
+        guard ratio.isFinite, ratio >= 0.001, ratio <= 10_000 else { return nil }
+
+        // Direction has to be sign-aware. When both predictors push the
+        // outcome the same way, "same direction" is correct; when they push
+        // opposite ways, the equivalent-impact adjustment is the opposite
+        // raw-unit direction. β* and raw coefficients share sign (SDs are
+        // strictly positive), so either field decides this cleanly.
+        let sameSign = (reference.standardizedCoefficient > 0) == (contributor.standardizedCoefficient > 0)
+        let directionPhrase = sameSign ? "in the same direction" : "in the opposite direction"
+
+        let referenceUnit = reference.unit.isEmpty ? "unit" : reference.unit
+        let thisUnit = contributor.unit.isEmpty ? "unit" : contributor.unit
+        return "For every 1 \(referenceUnit) you adjust \(reference.name), adjust \(contributor.name) by approximately \(formatNumber(ratio)) \(thisUnit) \(directionPhrase)."
+    }
+
+    private func elasticityCautionText(for contributor: RaceEngineerContributor) -> String? {
+        // No actionable recommendation is shown in these branches, so an
+        // elasticity warning has nothing to qualify.
+        guard contributor.hasMeaningfulVariation else { return nil }
+        guard contributor.hasClearDirection else { return nil }
+        let range = contributor.observedMax - contributor.observedMin
+        guard range > 1e-9 else { return nil }
+        let threshold = 0.15 * range
+        let higherIsBetter = impliedHigherIsBetter(for: contributor)
+        let unit = unitSuffix(contributor.unit)
+
+        // The anchor must mirror what recommendationText asked the driver to
+        // approach. For Case 1 the target is the top-session range, so the
+        // relevant anchor is its leading edge in the recommended direction
+        // (topSessionMax for raise, topSessionMin for lower). For Case 2 the
+        // target is "raise/lower from current session average," so the
+        // anchor is the mean. Anchoring on the mean in Case 1 was wrong: the
+        // top-session range is always inside the observed range, but a mean
+        // that happens to sit near an edge would falsely trigger the
+        // warning even when the recommended target itself is interior.
+        let anchor: Double
+        if contributor.topSessionsDiscriminate {
+            anchor = higherIsBetter ? contributor.topSessionMax : contributor.topSessionMin
+        } else {
+            anchor = contributor.observedMean
+        }
+
+        let edgeValue: Double
+        if higherIsBetter {
+            guard contributor.observedMax - anchor < threshold else { return nil }
+            edgeValue = contributor.observedMax
+        } else {
+            guard anchor - contributor.observedMin < threshold else { return nil }
+            edgeValue = contributor.observedMin
+        }
+        return "Caution: your sessions show limited data beyond \(formatValue(edgeValue, contributor: contributor))\(unit) for this metric. The relationship may not continue linearly outside your observed range — proceed carefully and observe the effect before making larger adjustments."
     }
 
     // MARK: - Section 4 — Data Sufficiency
