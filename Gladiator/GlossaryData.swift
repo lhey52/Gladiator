@@ -152,6 +152,49 @@ enum GlossaryData {
             seeAlso: ["Correlation", "Correlation Matrix", "Standard Deviation"]
         ),
         GlossaryTerm(
+            id: "race-engineer",
+            name: "Race Engineer",
+            definition: "A tool that automatically searches every combination of your Number and Time metrics to find the set that best predicts a chosen outcome, then turns that winning model into actionable setup guidance. You pick the outcome (for example Race Time or Tire Temperature) and Race Engineer does the rest: it fits thousands of candidate models using multiple linear regression, keeps the one with the highest Model Predictive Power, and presents its Metric Contributors, their direction of influence, and Setup Recommendations drawn from your fastest sessions. Unlike Performance Predictor, where you choose the predictors yourself, Race Engineer selects them for you.",
+            children: [
+                GlossaryChild(
+                    id: "best-subset-selection",
+                    name: "Best Subset Selection",
+                    definition: "The search procedure Race Engineer uses to pick which metrics enter the model. It exhaustively fits every combination of up to 15 of your plottable metrics — with 15 candidates that is 32,767 separate models — and keeps the combination with the highest Model Predictive Power. Each candidate model is fit with the same multiple linear regression (ordinary least squares) used by Performance Predictor, so both tools agree on what a given combination's predictive power is; the difference is that Race Engineer chooses the combination automatically rather than asking you to. The 15-metric cap keeps the search tractable and reflects that typical session counts cannot reliably support more predictors than that anyway."
+                ),
+                GlossaryChild(
+                    id: "model-predictive-power",
+                    name: "Model Predictive Power",
+                    definition: "The headline percentage shown at the top of the Race Engineer result, and the value the subset search optimizes for. It is calculated as Adjusted R-Squared — a corrected form of R-Squared (the coefficient of determination) that discounts the score for each additional predictor so a model cannot look better simply by adding more metrics. A 40% Model Predictive Power means the winning set of Metric Contributors jointly explains about 40% of the session-to-session variation in your chosen outcome, with the remaining 60% driven by factors outside your current tracked data. A lower value does not mean the tool is broken — it means untracked factors also influence the outcome."
+                ),
+                GlossaryChild(
+                    id: "metric-contributors",
+                    name: "Metric Contributors",
+                    definition: "The metrics Race Engineer selected for the winning model, listed in the METRIC CONTRIBUTORS section with a count next to the section title. Each contributor shows a Contribution Share, a Direction of Influence, a per-unit effect estimate, and the observed range across your sessions. The first contributor listed is the largest single lever on your outcome in this dataset; subsequent contributors are secondary levers but still carry measurable weight in the model."
+                ),
+                GlossaryChild(
+                    id: "contribution-share",
+                    name: "Contribution Share",
+                    definition: "The percentage displayed next to each Metric Contributor's name, representing its share of the model's total explanatory power. Shares are derived from standardized regression coefficients so metrics on different scales — tire pressure in PSI, lap time in seconds, fuel in gallons — can be compared fairly. Multiplying a contributor's share by the overall Model Predictive Power gives the approximate portion of outcome variation attributable to that metric alone, assuming the others in the model are held fixed."
+                ),
+                GlossaryChild(
+                    id: "direction-of-influence",
+                    name: "Direction of Influence",
+                    definition: "The arrow and sentence shown beneath each Metric Contributor indicating whether higher or lower values of that metric are associated with a better outcome in your data. It is derived from the sign of the predictor's standardized regression coefficient combined with the outcome type: for Time outcomes (where lower is better) a negative coefficient means higher values of the predictor are associated with faster times, while for Number outcomes (where higher is better) the relationship is reversed. When the coefficient is effectively zero the direction is shown as uncertain — the model found no reliable sign for that predictor in your current data."
+                ),
+                GlossaryChild(
+                    id: "setup-recommendations",
+                    name: "Setup Recommendations",
+                    definition: "Actionable hypotheses generated from the winning model, one per Metric Contributor. When a contributor has a clear direction and its values in your fastest sessions span a distinctive range, Race Engineer recommends targeting that range. When the direction is clear but the range is not discriminating, it suggests raising or lowering from your current session average based on the coefficient's sign. When a metric has not varied meaningfully across your sessions, it asks you to deliberately vary that value in future sessions so the model has something to learn from. These are testing hypotheses, not guaranteed outcomes — they are intended to be tried on track one change at a time and tracked with Correlation or Trend Analysis."
+                ),
+                GlossaryChild(
+                    id: "data-sufficiency",
+                    name: "Data Sufficiency",
+                    definition: "A five-tier rating — Bad, Poor, Fair, Good, Excellent — indicating how well your sample size supports the winning model. Thresholds match Performance Predictor and are based on sessions per predictor (total qualifying sessions divided by the number of metrics in the winning combination): 10-19 per predictor → Bad, 20-29 → Poor, 30-49 → Fair, 50-99 → Good, 100+ → Excellent. At lower sufficiency levels the winning combination is more likely to change as new sessions are added, because a smaller sample lets noise or a few unusual sessions tip one combination above another."
+                )
+            ],
+            seeAlso: ["Performance Predictor", "Correlation", "Trend Analysis"]
+        ),
+        GlossaryTerm(
             id: "standard-deviation",
             name: "Standard Deviation",
             definition: "A measure of how spread out your values are from the average. A low standard deviation means your results are consistent and clustered near the mean. A high standard deviation means there is more variation between sessions. It is commonly used to evaluate consistency in performance.",
