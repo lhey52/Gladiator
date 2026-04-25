@@ -17,6 +17,7 @@ struct RaceEngineerView: View {
     @State private var filter = AnalyticsFilterState()
     @State private var showingFilter: Bool = false
     @State private var showingOutcomePicker: Bool = false
+    @State private var showingOutcomeTooltip: Bool = false
     @State private var result: RaceEngineerOutcome?
     @State private var isAnalyzing: Bool = false
     @State private var showingPaywall: Bool = false
@@ -146,7 +147,7 @@ struct RaceEngineerView: View {
         } else {
             ScrollView {
                 VStack(spacing: 18) {
-                    ToolDescriptionCard(text: "Race Engineer runs best subset selection across every Number and Time metric you log to automatically identify the combination with the strongest predictive power for your chosen outcome. It then returns actionable, range-based setup targets drawn from your top-performing sessions.")
+                    ToolDescriptionCard(text: "Race Engineer runs best subset selection across every Number and Time metric you log to automatically identify the combination with the strongest predictive power for your chosen metric. It then returns actionable, range-based setup targets drawn from your session history.")
                     outcomeCard
                     analyzeButton
                     resultSection
@@ -180,11 +181,30 @@ struct RaceEngineerView: View {
 
     private var outcomeCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("OUTCOME (WHAT YOU WANT TO IMPROVE)")
-                    .font(.system(size: 10, weight: .heavy))
+            HStack(spacing: 6) {
+                Text("Select a metric analyze or improve:")
+                    .font(.system(size: 11, weight: .heavy))
                     .tracking(1.5)
                     .foregroundColor(Theme.accent)
+                Button {
+                    showingOutcomeTooltip = true
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Theme.accent)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingOutcomeTooltip) {
+                    Text("Best results come from choosing performance or condition outcomes, such as Race Time or Tire Temperature, rather than direct setup inputs you directly control, such as Tire Pressure or Fuel Load.")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Theme.textPrimary)
+                        .padding(16)
+                        .frame(width: 260)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .presentationCompactAdaptation(.popover)
+                        .presentationBackground(Theme.surface)
+                }
                 Spacer()
             }
 
@@ -383,8 +403,36 @@ struct RaceEngineerView: View {
 private struct RaceEngineerResultCard: View {
     let result: RaceEngineerResult
 
+    @State private var isModelSummaryExpanded: Bool = false
+    @State private var isContributorsExpanded: Bool = false
+    @State private var isRecommendationsExpanded: Bool = false
+    @State private var isDataSufficiencyExpanded: Bool = false
+
     private var adjustedRSquaredPercent: Int {
         Int((result.adjustedRSquared * 100).rounded())
+    }
+
+    private func sectionHeader(
+        title: String,
+        systemImage: String,
+        isExpanded: Bool,
+        toggle: @escaping () -> Void
+    ) -> some View {
+        Button(action: toggle) {
+            HStack {
+                Label(title, systemImage: systemImage)
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.accent)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .heavy))
+                    .foregroundColor(Theme.accent)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     var body: some View {
@@ -427,9 +475,9 @@ private struct RaceEngineerResultCard: View {
                     .font(.system(size: 28, weight: .heavy, design: .rounded))
                     .foregroundColor(Theme.accent)
             }
-            Text("Adjusted R² — the share of variation in \(result.outcome) jointly explained by the \(result.predictors.count) selected metric\(result.predictors.count == 1 ? "" : "s").")
+            Text("Race Engineer has identified \(result.predictors.count) metric\(result.predictors.count == 1 ? "" : "s") that together appear to influence approximately \(adjustedRSquaredPercent)% of your \(result.outcome). The remaining \(100 - adjustedRSquaredPercent)% of variation lies outside your current tracked data.")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Theme.textSecondary)
+                .foregroundColor(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -438,15 +486,22 @@ private struct RaceEngineerResultCard: View {
 
     private var modelSummarySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("MODEL SUMMARY", systemImage: "sparkles")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.accent)
+            sectionHeader(
+                title: "MODEL SUMMARY",
+                systemImage: "sparkles",
+                isExpanded: isModelSummaryExpanded
+            ) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isModelSummaryExpanded.toggle()
+                }
+            }
 
-            Text(modelSummaryText)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
+            if isModelSummaryExpanded {
+                Text(modelSummaryText)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -454,7 +509,7 @@ private struct RaceEngineerResultCard: View {
         let n = result.predictors.count
         let names = result.contributors.map(\.name).joined(separator: ", ")
         let pct = adjustedRSquaredPercent
-        var text = "The following \(n) metric\(n == 1 ? "" : "s") when combined currently have the highest predictive power based on \(result.outcome): \(names). In other words, of all the metrics you have logged so far, "
+        var text = "The following \(n) metric\(n == 1 ? "" : "s") when combined currently have the highest predictive power for \(result.outcome): \(names). In other words, of all the metrics you have logged so far, "
         if n == 1 {
             text += "this metric "
         } else {
@@ -485,24 +540,31 @@ private struct RaceEngineerResultCard: View {
 
     private var contributorsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("CONTRIBUTORS", systemImage: "chart.bar.fill")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.accent)
-
-            Text("The following \(result.contributors.count) metric\(result.contributors.count == 1 ? "" : "s") \(result.contributors.count == 1 ? "was" : "were") isolated amongst a grouping of up to 15 combined metrics and returned the highest predictive power for \(result.outcome):")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            ForEach(Array(result.contributors.enumerated()), id: \.element.id) { index, contributor in
-                contributorRow(contributor: contributor, isTop: index == 0)
+            sectionHeader(
+                title: "METRIC CONTRIBUTORS (\(result.contributors.count))",
+                systemImage: "chart.bar.fill",
+                isExpanded: isContributorsExpanded
+            ) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isContributorsExpanded.toggle()
+                }
             }
 
-            Text("Each metric's contribution is its share of the model's explanatory power. Absolute contribution (share × Adjusted R²) is the portion of overall \(result.outcome) variation attributable to that metric, assuming the others in the model are held fixed.")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(Theme.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            if isContributorsExpanded {
+                Text("The following \(result.contributors.count) metric\(result.contributors.count == 1 ? "" : "s") \(result.contributors.count == 1 ? "was" : "were") isolated amongst a grouping of up to 15 combined metrics and returned the highest predictive power for \(result.outcome):")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ForEach(Array(result.contributors.enumerated()), id: \.element.id) { index, contributor in
+                    contributorRow(contributor: contributor, isTop: index == 0)
+                }
+
+                Text("Each metric's contribution is its share of the model's explanatory power. Absolute contribution (share × Adjusted R²) is the portion of overall \(result.outcome) variation attributable to that metric, assuming the others in the model are held fixed.")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -649,40 +711,47 @@ private struct RaceEngineerResultCard: View {
 
     private var recommendationsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("SETUP RECOMMENDATIONS", systemImage: "wrench.and.screwdriver.fill")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.accent)
-
-            Text("For best results adjust one metric at a time across sessions so you can isolate the effect of each change. Start with your highest contributing metric first.")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("Continue logging sessions as normal to improve the model and refine these recommendations over time.")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            ForEach(result.contributors) { contributor in
-                recommendationRow(contributor: contributor)
+            sectionHeader(
+                title: "SETUP RECOMMENDATIONS",
+                systemImage: "wrench.and.screwdriver.fill",
+                isExpanded: isRecommendationsExpanded
+            ) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isRecommendationsExpanded.toggle()
+                }
             }
 
-            Text("These are hypotheses to test on track, not guaranteed outcomes. Deliberately vary these values across sessions and use the Correlation and Trend tools to track the effect.")
-                .font(.system(size: 11, weight: .heavy))
-                .tracking(0.3)
-                .foregroundColor(Theme.accent.opacity(0.9))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Theme.accent.opacity(0.08))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
-                )
+            if isRecommendationsExpanded {
+                Text("For best results adjust one metric at a time across sessions so you can isolate the effect of each change. Start with your highest contributing metric first.")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Continue logging sessions as normal to improve the model and refine these recommendations over time.")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ForEach(result.contributors) { contributor in
+                    recommendationRow(contributor: contributor)
+                }
+
+                Text("These are hypotheses to test on track, not guaranteed outcomes. Deliberately vary these values across sessions and use the Correlation and Trend tools to track the effect.")
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(0.3)
+                    .foregroundColor(Theme.accent.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Theme.accent.opacity(0.08))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
+                    )
+            }
         }
     }
 
@@ -755,50 +824,57 @@ private struct RaceEngineerResultCard: View {
         let needed = max(0, goodTarget - currentSessions)
 
         return VStack(alignment: .leading, spacing: 12) {
-            Label("DATA SUFFICIENCY", systemImage: "square.stack.3d.up.fill")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.accent)
-
-            DataSufficiencyBadge(level: result.dataSufficiency)
-
-            Text(result.dataSufficiency.description(
-                sampleSize: result.sampleSize,
-                predictorCount: result.predictors.count
-            ))
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundColor(Theme.textPrimary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            VStack(spacing: 0) {
-                sufficiencyRow(label: "Sessions analyzed", value: "\(currentSessions)")
-                Divider().background(Theme.hairline).padding(.leading, 14)
-                sufficiencyRow(label: "Predictors in model", value: "\(result.predictors.count)")
-                Divider().background(Theme.hairline).padding(.leading, 14)
-                sufficiencyRow(label: "Recommended for Good", value: "\(goodTarget)")
-                Divider().background(Theme.hairline).padding(.leading, 14)
-                sufficiencyRow(label: "Recommended for Excellent", value: "\(excellentTarget)")
-                if needed > 0 {
-                    Divider().background(Theme.hairline).padding(.leading, 14)
-                    sufficiencyRow(
-                        label: "Still needed for Good",
-                        value: "+\(needed) session\(needed == 1 ? "" : "s")",
-                        emphasize: true
-                    )
+            sectionHeader(
+                title: "DATA SUFFICIENCY",
+                systemImage: "square.stack.3d.up.fill",
+                isExpanded: isDataSufficiencyExpanded
+            ) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isDataSufficiencyExpanded.toggle()
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceElevated)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Theme.hairline, lineWidth: 1)
-            )
 
-            Text("As more sessions are logged\(contextSuffix) the model may identify different optimal predictors and update these recommendations — particularly at Bad or Poor data sufficiency levels where results are most likely to change.")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Theme.textSecondary)
+            if isDataSufficiencyExpanded {
+                DataSufficiencyBadge(level: result.dataSufficiency)
+
+                Text(result.dataSufficiency.description(
+                    sampleSize: result.sampleSize,
+                    predictorCount: result.predictors.count
+                ))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
+
+                VStack(spacing: 0) {
+                    sufficiencyRow(label: "Sessions analyzed", value: "\(currentSessions)")
+                    Divider().background(Theme.hairline).padding(.leading, 14)
+                    sufficiencyRow(label: "Predictors in model", value: "\(result.predictors.count)")
+                    Divider().background(Theme.hairline).padding(.leading, 14)
+                    sufficiencyRow(label: "Recommended for Good", value: "\(goodTarget)")
+                    Divider().background(Theme.hairline).padding(.leading, 14)
+                    sufficiencyRow(label: "Recommended for Excellent", value: "\(excellentTarget)")
+                    if needed > 0 {
+                        Divider().background(Theme.hairline).padding(.leading, 14)
+                        sufficiencyRow(
+                            label: "Still needed for Good",
+                            value: "+\(needed) session\(needed == 1 ? "" : "s")",
+                            emphasize: true
+                        )
+                    }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceElevated)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Theme.hairline, lineWidth: 1)
+                )
+
+                Text("As more sessions are logged\(contextSuffix) the model may identify different optimal predictors and update these recommendations — particularly at Bad or Poor data sufficiency levels where results are most likely to change.")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
