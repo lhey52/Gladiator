@@ -49,13 +49,13 @@ enum DemoDataSeeder {
 
     // MARK: - Demo 2
 
-    private static var demo2Metrics: [(name: String, type: FieldType)] {
+    private static var demo2Metrics: [(name: String, type: FieldType, stepSize: Double?)] {
         [
-            ("Race Time", .time),
-            (CustomField.combine(name: "Tire Pressure (FL)", unit: "PSI"), .number),
-            (CustomField.combine(name: "Tire Pressure (FR)", unit: "PSI"), .number),
-            (CustomField.combine(name: "Tire Pressure (BL)", unit: "PSI"), .number),
-            (CustomField.combine(name: "Tire Pressure (BR)", unit: "PSI"), .number)
+            ("Race Time", .time, nil),
+            (CustomField.combine(name: "Tire Pressure (FL)", unit: "PSI"), .number, 1),
+            (CustomField.combine(name: "Tire Pressure (FR)", unit: "PSI"), .number, 1),
+            (CustomField.combine(name: "Tire Pressure (BL)", unit: "PSI"), .number, 1),
+            (CustomField.combine(name: "Tire Pressure (BR)", unit: "PSI"), .number, 1)
         ]
     }
 
@@ -138,7 +138,12 @@ enum DemoDataSeeder {
         let maxOrder = existing.map(\.sortOrder).max() ?? -1
         var nextOrder = maxOrder + 1
         for metric in demo2Metrics where !existingNames.contains(metric.name.lowercased()) {
-            context.insert(CustomField(name: metric.name, fieldType: metric.type, sortOrder: nextOrder))
+            context.insert(CustomField(
+                name: metric.name,
+                fieldType: metric.type,
+                sortOrder: nextOrder,
+                stepSize: metric.stepSize
+            ))
             nextOrder += 1
         }
     }

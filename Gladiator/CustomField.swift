@@ -73,12 +73,19 @@ final class CustomField {
     var fieldTypeRaw: String
     var sortOrder: Int
     var createdAt: Date
+    // Step size is only meaningful for Number metrics — it captures the
+    // smallest increment the driver can realistically dial in. Stored as
+    // optional so existing rows lightweight-migrate to nil and so Text/Time
+    // metrics can omit it entirely. A value of 0 marks the metric as outside
+    // the driver's control (e.g. ambient temperature).
+    var stepSize: Double?
 
-    init(name: String = "", fieldType: FieldType = .text, sortOrder: Int = 0) {
+    init(name: String = "", fieldType: FieldType = .text, sortOrder: Int = 0, stepSize: Double? = nil) {
         self.name = name
         self.fieldTypeRaw = fieldType.rawValue
         self.sortOrder = sortOrder
         self.createdAt = .now
+        self.stepSize = stepSize
     }
 
     var fieldType: FieldType {
