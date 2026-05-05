@@ -30,6 +30,7 @@ struct AddSessionView: View {
     @State private var sessionType: SessionType = .practice
     @State private var notes: String = ""
     @State private var fieldEntries: [String: String] = [:]
+    @State private var activeZone: CarZone?
     @FocusState private var focusedField: SessionFormField?
 
     private var canSave: Bool {
@@ -38,10 +39,26 @@ struct AddSessionView: View {
 
     private var allFields: [SessionFormField] {
         var result: [SessionFormField] = []
-        for field in customFields {
+        for field in customFields where field.fieldType != .time {
             result.append(.custom(field.name))
         }
         result.append(.notes)
+        return result
+    }
+
+    private var generalFields: [CustomField] {
+        customFields.filter { $0.zone == .general }
+    }
+
+    private var zoneStates: [CarZone: ZoneFillState] {
+        var result: [CarZone: ZoneFillState] = [:]
+        for zone in CarZone.carZones {
+            let zoneFields = customFields.filter { $0.zone == zone }
+            let filled = zoneFields.reduce(0) { count, field in
+                count + (isFieldFilled(field) ? 1 : 0)
+            }
+            result[zone] = ZoneFillState(filled: filled, total: zoneFields.count)
+        }
         return result
     }
 
@@ -63,6 +80,16 @@ struct AddSessionView: View {
             .keyboardToolbar(focusedField: $focusedField, fields: allFields)
         }
         .preferredColorScheme(.dark)
+        .sheet(item: $activeZone) { zone in
+            ZoneMetricsSheet(
+                zone: zone,
+                fields: customFields.filter { $0.zone == zone },
+                entries: $fieldEntries,
+                onClose: { activeZone = nil }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .onAppear {
             guard !didLoadDefault else { return }
             didLoadDefault = true
@@ -75,17 +102,21 @@ struct AddSessionView: View {
         }
     }
 
+    private func isFieldFilled(_ field: CustomField) -> Bool {
+        let raw = fieldEntries[field.name, default: ""].trimmingCharacters(in: .whitespaces)
+        if raw.isEmpty { return false }
+        if field.fieldType == .time, let val = Double(raw), val == 0 { return false }
+        return true
+    }
+
     private var completionProgress: Double {
         let total = 3 + customFields.count
         guard total > 0 else { return 0 }
         var filled = 1 // session type always has a value
         if !trackName.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
         if !vehicleName.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
-        for field in customFields {
-            let raw = fieldEntries[field.name, default: ""].trimmingCharacters(in: .whitespaces)
-            if !raw.isEmpty {
-                filled += 1
-            }
+        for field in customFields where isFieldFilled(field) {
+            filled += 1
         }
         return Double(filled) / Double(total)
     }
@@ -119,12 +150,14 @@ struct AddSessionView: View {
     private var formScroll: some View {
         ScrollView {
             VStack(spacing: 18) {
+                raceCarSection
                 if !tipDismissed {
                     sessionFormTip
                 }
-                sessionCard
-                if !customFields.isEmpty {
-                    metricsCard
+                typeChips
+                sessionDetailsCard
+                if !generalFields.isEmpty {
+                    generalMetricsCard
                 }
                 notesCard
             }
@@ -137,9 +170,10 @@ struct AddSessionView: View {
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(Theme.accent)
-            Text("Customize your fields and metrics in Settings")
+            Text("Tap any zone on the car to enter its metrics. Customize fields in Settings.")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button { tipDismissed = true } label: {
                 Image(systemName: "xmark")
@@ -175,13 +209,74 @@ struct AddSessionView: View {
         }
     }
 
-    // MARK: - Session card (type / track / vehicle / date)
+    // MARK: - Session type chips
 
-    private var sessionCard: some View {
+    private var typeChips: some View {
+        HStack(spacing: 8) {
+            ForEach(SessionType.allCases) { type in
+                typeChip(type)
+            }
+        }
+    }
+
+    private func typeChip(_ type: SessionType) -> some View {
+        let isSelected = sessionType == type
+        return Button {
+            sessionType = type
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: type.systemImage)
+                    .font(.system(size: 11, weight: .bold))
+                Text(type.rawValue.uppercased())
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .allowsTightening(true)
+            }
+            .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                Capsule().fill(isSelected ? Theme.accent.opacity(0.15) : Theme.surface)
+            )
+            .overlay(
+                Capsule().stroke(isSelected ? Theme.accent.opacity(0.5) : Theme.hairline, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Race car section
+
+    private var raceCarSection: some View {
+        VStack(spacing: 0) {
+            cardHeader("ZONES")
+            RaceCarDiagramView(
+                zoneStates: zoneStates,
+                onTapZone: { zone in
+                    focusedField = nil
+                    activeZone = zone
+                }
+            )
+            .padding(.horizontal, 12)
+            .padding(.bottom, 14)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Session details card
+
+    private var sessionDetailsCard: some View {
         VStack(spacing: 0) {
             cardHeader("SESSION")
-            typeRow
-            Divider().background(Theme.hairline)
             trackRow
             Divider().background(Theme.hairline)
             vehicleRow
@@ -209,44 +304,6 @@ struct AddSessionView: View {
         .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 10)
-    }
-
-    private var typeRow: some View {
-        HStack(spacing: 8) {
-            ForEach(SessionType.allCases) { type in
-                typeChip(type)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-
-    private func typeChip(_ type: SessionType) -> some View {
-        let isSelected = sessionType == type
-        return Button {
-            sessionType = type
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: type.systemImage)
-                    .font(.system(size: 11, weight: .bold))
-                Text(type.rawValue.uppercased())
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(1.5)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-                    .allowsTightening(true)
-            }
-            .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(
-                Capsule().fill(isSelected ? Theme.accent.opacity(0.15) : Theme.surfaceElevated)
-            )
-            .overlay(
-                Capsule().stroke(isSelected ? Theme.accent.opacity(0.5) : Theme.hairline, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     private var trackRow: some View {
@@ -309,18 +366,18 @@ struct AddSessionView: View {
         .padding(.vertical, 14)
     }
 
-    // MARK: - Metrics card
+    // MARK: - General metrics card
 
-    private var metricsCard: some View {
+    private var generalMetricsCard: some View {
         VStack(spacing: 0) {
-            cardHeader("CUSTOM DATA")
-            ForEach(Array(customFields.enumerated()), id: \.element.id) { index, field in
+            cardHeader("GENERAL")
+            ForEach(Array(generalFields.enumerated()), id: \.element.id) { index, field in
                 MetricRow(
                     field: field,
                     value: bindingForField(field),
                     focusedField: $focusedField
                 )
-                if index < customFields.count - 1 {
+                if index < generalFields.count - 1 {
                     Divider().background(Theme.hairline)
                 }
             }

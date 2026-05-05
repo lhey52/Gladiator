@@ -23,15 +23,23 @@ struct EditMetricView: View {
     @State private var unit: String = ""
     @State private var stepSize: String = "0.0"
     @State private var fieldType: FieldType = .number
+    @State private var zone: CarZone = .general
     @State private var pendingStepSize: Double = 0
     @State private var showZeroStepAlert: Bool = false
     @State private var showLargeStepAlert: Bool = false
     @FocusState private var focusedField: EditFormField?
 
     private var isDuplicate: Bool {
+        // Duplicates are scoped to the selected zone — the same metric name
+        // is allowed in different zones. Case-insensitive match on the typed
+        // name and excluding this metric's own row from the comparison.
         let trimmed = name.trimmingCharacters(in: .whitespaces).lowercased()
         guard !trimmed.isEmpty else { return false }
-        return existingFields.contains { $0.name.lowercased() == trimmed && $0.persistentModelID != field.persistentModelID }
+        return existingFields.contains {
+            $0.name.lowercased() == trimmed
+                && $0.zone == zone
+                && $0.persistentModelID != field.persistentModelID
+        }
     }
 
     private var parsedStepSize: Double? {
@@ -85,6 +93,7 @@ struct EditMetricView: View {
             name = parts.name
             unit = parts.unit
             fieldType = field.fieldType
+            zone = field.zone
             if let storedStep = field.stepSize {
                 stepSize = formatStepSize(storedStep)
             }
@@ -100,8 +109,53 @@ struct EditMetricView: View {
                     stepSizeCard
                 }
                 typeCard
+                zoneCard
             }
             .padding(20)
+        }
+    }
+
+    private var zoneCard: some View {
+        fieldCard(label: "ZONE") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Where does this metric appear on the race car interface?")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Menu {
+                    ForEach(CarZone.pickerOrder) { option in
+                        Button {
+                            zone = option
+                        } label: {
+                            if option == zone {
+                                Label(option.displayName, systemImage: "checkmark")
+                            } else {
+                                Text(option.displayName)
+                            }
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text(zone.displayName)
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(Theme.textPrimary)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(Theme.accent)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Theme.surfaceElevated)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Theme.hairline, lineWidth: 1)
+                    )
+                }
+            }
         }
     }
 
@@ -133,7 +187,7 @@ struct EditMetricView: View {
                 .autocorrectionDisabled()
                 .focused($focusedField, equals: .name)
                 if isDuplicate {
-                    Text("A metric with this name already exists")
+                    Text("A metric with this name already exists in this zone")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.red)
                 }
@@ -264,6 +318,7 @@ struct EditMetricView: View {
         // Step size is meaningless for Text/Time metrics; clear it on type
         // change so stale values don't linger after a metric is reclassified.
         field.stepSize = fieldType == .number ? parsedStepSize : nil
+        field.zone = zone
         dismiss()
     }
 

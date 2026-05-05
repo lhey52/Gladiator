@@ -79,18 +79,34 @@ final class CustomField {
     // metrics can omit it entirely. A value of 0 marks the metric as outside
     // the driver's control (e.g. ambient temperature).
     var stepSize: Double?
+    // Race car zone assignment used by the visual zone interface in the
+    // Add/Edit Session forms. Stored as a raw String with a default of
+    // "General" so existing rows lightweight-migrate without manual fixup.
+    var zoneRaw: String = CarZone.general.rawValue
 
-    init(name: String = "", fieldType: FieldType = .text, sortOrder: Int = 0, stepSize: Double? = nil) {
+    init(
+        name: String = "",
+        fieldType: FieldType = .text,
+        sortOrder: Int = 0,
+        stepSize: Double? = nil,
+        zone: CarZone = .general
+    ) {
         self.name = name
         self.fieldTypeRaw = fieldType.rawValue
         self.sortOrder = sortOrder
         self.createdAt = .now
         self.stepSize = stepSize
+        self.zoneRaw = zone.rawValue
     }
 
     var fieldType: FieldType {
         get { FieldType(rawValue: fieldTypeRaw) ?? .text }
         set { fieldTypeRaw = newValue.rawValue }
+    }
+
+    var zone: CarZone {
+        get { CarZone(rawValue: zoneRaw) ?? .general }
+        set { zoneRaw = newValue.rawValue }
     }
 
     static func combine(name: String, unit: String) -> String {

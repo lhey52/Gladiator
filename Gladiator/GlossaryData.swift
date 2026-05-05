@@ -101,7 +101,13 @@ enum GlossaryData {
             id: "custom-metric",
             name: "Custom Metric",
             definition: "A user-defined data field for tracking specific performance or setup values. Each metric has a type — Number (e.g. tire pressure, fuel load), Text (e.g. tire compound), or Time (e.g. lap time, sector time). Metrics can be added, edited, reordered, and removed in Settings without affecting existing saved sessions.",
-            children: [],
+            children: [
+                GlossaryChild(
+                    id: "car-zone",
+                    name: "Car Zone",
+                    definition: "A region of the visual race car interface in Add and Edit Session that groups related metrics. Zones are FL Tire, FR Tire, BL Tire, BR Tire, Engine, Cockpit, Front, Rear, and General. Each metric is assigned to one zone in the Add or Edit Metric form (default General). Tapping a zone on the car opens a focused entry sheet listing only that zone's metrics. Zones with assigned metrics glow orange and display a filled-out indicator (e.g. 2/3); zones with no assigned metrics remain visible but are not tappable. General-zone metrics appear in a connected list below the car alongside session details. Zone is purely an organisational layer — it does not affect analytics, persistence, or any per-track calculations."
+                )
+            ],
             seeAlso: ["Personal Best", "Scatter Plot"]
         ),
         GlossaryTerm(
