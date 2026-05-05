@@ -44,9 +44,7 @@ struct ZoneMetricsSheet: View {
                     NumberPadBubbleOverlay(
                         anchorFrame: frame,
                         text: bindingForField(field),
-                        onDismiss: { activeNumberField = nil },
-                        onNext: { advanceToNextNumberField(after: activeName) },
-                        isLastField: isLastNumberField(activeName)
+                        onDismiss: { activeNumberField = nil }
                     )
                     .transition(.opacity)
                 }
@@ -132,28 +130,6 @@ struct ZoneMetricsSheet: View {
             get: { entries[field.name, default: ""] },
             set: { entries[field.name] = $0 }
         )
-    }
-
-    private var orderedNumberFieldNames: [String] {
-        fields.filter { $0.fieldType == .number }.map(\.name)
-    }
-
-    private func isLastNumberField(_ name: String) -> Bool {
-        let names = orderedNumberFieldNames
-        guard let index = names.firstIndex(of: name) else { return true }
-        return index == names.count - 1
-    }
-
-    private func advanceToNextNumberField(after name: String) {
-        let names = orderedNumberFieldNames
-        guard let index = names.firstIndex(of: name),
-              index + 1 < names.count else {
-            // Defensive fallback: if there is no next field, just dismiss
-            // rather than leaving the bubble pinned to a stale anchor.
-            activeNumberField = nil
-            return
-        }
-        activeNumberField = names[index + 1]
     }
 }
 

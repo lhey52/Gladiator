@@ -10,28 +10,9 @@ import SwiftUI
 /// A compact number-pad bubble that edits a string value in-place.
 /// Designed to float over content as a popover-style entry surface, so the
 /// host view should suppress the system keyboard and present this instead.
-///
-/// `onNext` is optional. When supplied, a secondary button is rendered below
-/// the primary Done button — labelled "NEXT" while there is still a next
-/// field, and "DONE" when `isLastField` is true (in which case it acts as a
-/// second dismiss). Call sites that don't need field-stepping can omit it.
 struct NumberPadBubble: View {
     @Binding var text: String
     let onDone: () -> Void
-    let onNext: (() -> Void)?
-    let isLastField: Bool
-
-    init(
-        text: Binding<String>,
-        onDone: @escaping () -> Void,
-        onNext: (() -> Void)? = nil,
-        isLastField: Bool = false
-    ) {
-        self._text = text
-        self.onDone = onDone
-        self.onNext = onNext
-        self.isLastField = isLastField
-    }
 
     static let preferredWidth: CGFloat = 220
 
@@ -46,9 +27,6 @@ struct NumberPadBubble: View {
                 backspaceButton
             }
             doneButton
-            if onNext != nil {
-                secondaryActionButton
-            }
         }
         .padding(12)
         .background(
@@ -128,34 +106,6 @@ struct NumberPadBubble: View {
         .buttonStyle(NumberPadButtonStyle())
     }
 
-    private var secondaryActionButton: some View {
-        Button {
-            // On the last field there is nowhere to advance to; tapping the
-            // (now relabelled "DONE") secondary button dismisses, mirroring
-            // the primary action.
-            if isLastField {
-                onDone()
-            } else {
-                onNext?()
-            }
-        } label: {
-            Text(isLastField ? "DONE" : "NEXT")
-                .font(.system(size: 13, weight: .heavy))
-                .tracking(1.6)
-                .foregroundColor(Theme.accent)
-                .frame(maxWidth: .infinity, minHeight: 36)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Theme.accent.opacity(0.45), lineWidth: 1)
-                )
-        }
-        .buttonStyle(NumberPadButtonStyle())
-    }
-
     private func insert(_ d: String) {
         if d == "." {
             // Only one decimal point allowed; auto-prefix a leading zero so
@@ -193,29 +143,13 @@ struct NumberPadBubbleOverlay: View {
     let anchorFrame: CGRect
     @Binding var text: String
     let onDismiss: () -> Void
-    let onNext: (() -> Void)?
-    let isLastField: Bool
-
-    init(
-        anchorFrame: CGRect,
-        text: Binding<String>,
-        onDismiss: @escaping () -> Void,
-        onNext: (() -> Void)? = nil,
-        isLastField: Bool = false
-    ) {
-        self.anchorFrame = anchorFrame
-        self._text = text
-        self.onDismiss = onDismiss
-        self.onNext = onNext
-        self.isLastField = isLastField
-    }
 
     private let bubbleWidth: CGFloat = NumberPadBubble.preferredWidth
-    private let estimatedHeight: CGFloat = 300
+    private let estimatedHeight: CGFloat = 256
     private let gap: CGFloat = 10
     private let edgeMargin: CGFloat = 12
 
-    @State private var measuredHeight: CGFloat = 300
+    @State private var measuredHeight: CGFloat = 256
 
     var body: some View {
         GeometryReader { geo in
@@ -231,26 +165,21 @@ struct NumberPadBubbleOverlay: View {
                     .contentShape(Rectangle())
                     .onTapGesture { onDismiss() }
 
-                NumberPadBubble(
-                    text: $text,
-                    onDone: onDismiss,
-                    onNext: onNext,
-                    isLastField: isLastField
-                )
-                .frame(width: bubbleWidth)
-                .background(
-                    GeometryReader { bubbleGeo in
-                        Color.clear
-                            .preference(
-                                key: NumberPadBubbleHeightKey.self,
-                                value: bubbleGeo.size.height
-                            )
-                    }
-                )
-                .position(
-                    x: placement.x + bubbleWidth / 2,
-                    y: placement.y + bubbleHeight / 2
-                )
+                NumberPadBubble(text: $text, onDone: onDismiss)
+                    .frame(width: bubbleWidth)
+                    .background(
+                        GeometryReader { bubbleGeo in
+                            Color.clear
+                                .preference(
+                                    key: NumberPadBubbleHeightKey.self,
+                                    value: bubbleGeo.size.height
+                                )
+                        }
+                    )
+                    .position(
+                        x: placement.x + bubbleWidth / 2,
+                        y: placement.y + bubbleHeight / 2
+                    )
             }
             .onPreferenceChange(NumberPadBubbleHeightKey.self) { measuredHeight = $0 }
         }
