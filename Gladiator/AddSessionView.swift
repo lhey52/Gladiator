@@ -7,7 +7,6 @@ import SwiftUI
 import SwiftData
 
 private enum SessionFormField: Hashable {
-    case custom(String)
     case notes
 }
 
@@ -31,6 +30,7 @@ struct AddSessionView: View {
     @State private var notes: String = ""
     @State private var fieldEntries: [String: String] = [:]
     @State private var activeZone: CarZone?
+    @State private var pitSheetPresented: Bool = false
     @FocusState private var focusedField: SessionFormField?
 
     private var canSave: Bool {
@@ -38,12 +38,10 @@ struct AddSessionView: View {
     }
 
     private var allFields: [SessionFormField] {
-        var result: [SessionFormField] = []
-        for field in customFields where field.fieldType != .time {
-            result.append(.custom(field.name))
-        }
-        result.append(.notes)
-        return result
+        // Only the inline notes editor is focusable on the form root —
+        // metric inputs live inside the zone and pit-box sheets and have
+        // their own focus state.
+        [.notes]
     }
 
     private var generalFields: [CustomField] {
@@ -86,6 +84,21 @@ struct AddSessionView: View {
                 fields: customFields.filter { $0.zone == zone },
                 entries: $fieldEntries,
                 onClose: { activeZone = nil }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $pitSheetPresented) {
+            PitInfoSheet(
+                date: $date,
+                trackName: $trackName,
+                vehicleName: $vehicleName,
+                sessionType: $sessionType,
+                tracks: tracks,
+                vehicles: vehicles,
+                generalFields: generalFields,
+                entries: $fieldEntries,
+                onClose: { pitSheetPresented = false }
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -154,11 +167,6 @@ struct AddSessionView: View {
                 if !tipDismissed {
                     sessionFormTip
                 }
-                typeChips
-                sessionDetailsCard
-                if !generalFields.isEmpty {
-                    generalMetricsCard
-                }
                 notesCard
             }
             .padding(20)
@@ -209,49 +217,14 @@ struct AddSessionView: View {
         }
     }
 
-    // MARK: - Session type chips
-
-    private var typeChips: some View {
-        HStack(spacing: 8) {
-            ForEach(SessionType.allCases) { type in
-                typeChip(type)
-            }
-        }
-    }
-
-    private func typeChip(_ type: SessionType) -> some View {
-        let isSelected = sessionType == type
-        return Button {
-            sessionType = type
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: type.systemImage)
-                    .font(.system(size: 11, weight: .bold))
-                Text(type.rawValue.uppercased())
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(1.5)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-                    .allowsTightening(true)
-            }
-            .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(
-                Capsule().fill(isSelected ? Theme.accent.opacity(0.15) : Theme.surface)
-            )
-            .overlay(
-                Capsule().stroke(isSelected ? Theme.accent.opacity(0.5) : Theme.hairline, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: - Race car section
 
     private var raceCarSection: some View {
         VStack(spacing: 0) {
             cardHeader("ZONES")
+            pitBoxElement
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
             RaceCarDiagramView(
                 zoneStates: zoneStates,
                 onTapZone: { zone in
@@ -272,25 +245,35 @@ struct AddSessionView: View {
         )
     }
 
-    // MARK: - Session details card
-
-    private var sessionDetailsCard: some View {
-        VStack(spacing: 0) {
-            cardHeader("SESSION")
-            trackRow
-            Divider().background(Theme.hairline)
-            vehicleRow
-            Divider().background(Theme.hairline)
-            dateRow
+    private var pitBoxElement: some View {
+        Button {
+            focusedField = nil
+            pitSheetPresented = true
+        } label: {
+            VStack(spacing: 2) {
+                Text("PIT BOX")
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.8)
+                    .foregroundColor(Theme.accent)
+                Text("TRACK · VEHICLE · GENERAL")
+                    .font(.system(size: 8, weight: .heavy))
+                    .tracking(1.2)
+                    .foregroundColor(Theme.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 18)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Theme.accent.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Theme.accent.opacity(0.50), lineWidth: 1.5)
+            )
+            .shadow(color: Theme.accent.opacity(0.20), radius: 6)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
+        .buttonStyle(.plain)
     }
 
     private func cardHeader(_ text: String) -> some View {
@@ -304,92 +287,6 @@ struct AddSessionView: View {
         .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 10)
-    }
-
-    private var trackRow: some View {
-        row(label: "TRACK") {
-            Picker("", selection: $trackName) {
-                Text("Select Track")
-                    .foregroundColor(Theme.textTertiary)
-                    .tag("")
-                ForEach(tracks) { track in
-                    Text(track.name).tag(track.name)
-                }
-            }
-            .pickerStyle(.menu)
-            .tint(Theme.accent)
-            .labelsHidden()
-        }
-    }
-
-    private var vehicleRow: some View {
-        row(label: "VEHICLE") {
-            Picker("", selection: $vehicleName) {
-                Text("Select Vehicle")
-                    .foregroundColor(Theme.textTertiary)
-                    .tag("")
-                ForEach(vehicles) { vehicle in
-                    Text(vehicle.name).tag(vehicle.name)
-                }
-            }
-            .pickerStyle(.menu)
-            .tint(Theme.accent)
-            .labelsHidden()
-        }
-    }
-
-    private var dateRow: some View {
-        row(label: "DATE") {
-            DatePicker(
-                "",
-                selection: $date,
-                displayedComponents: [.date, .hourAndMinute]
-            )
-            .labelsHidden()
-            .datePickerStyle(.compact)
-            .tint(Theme.accent)
-            .colorScheme(.dark)
-        }
-    }
-
-    @ViewBuilder
-    private func row<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 11, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
-            Spacer()
-            content()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - General metrics card
-
-    private var generalMetricsCard: some View {
-        VStack(spacing: 0) {
-            cardHeader("GENERAL")
-            ForEach(Array(generalFields.enumerated()), id: \.element.id) { index, field in
-                MetricRow(
-                    field: field,
-                    value: bindingForField(field),
-                    focusedField: $focusedField
-                )
-                if index < generalFields.count - 1 {
-                    Divider().background(Theme.hairline)
-                }
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
     }
 
     // MARK: - Notes card
@@ -456,59 +353,6 @@ struct AddSessionView: View {
         }
 
         dismiss()
-    }
-}
-
-private struct MetricRow: View {
-    let field: CustomField
-    @Binding var value: String
-    var focusedField: FocusState<SessionFormField?>.Binding
-
-    private var timeBinding: Binding<Double> {
-        Binding(
-            get: { Double(value) ?? 0 },
-            set: { value = String($0) }
-        )
-    }
-
-    private var parts: (name: String, unit: String) {
-        CustomField.split(name: field.name)
-    }
-
-    var body: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(parts.name.uppercased())
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(1.5)
-                    .foregroundColor(Theme.textSecondary)
-                if !parts.unit.isEmpty {
-                    Text(parts.unit)
-                        .font(.system(size: 9, weight: .semibold))
-                        .tracking(0.8)
-                        .foregroundColor(Theme.textTertiary)
-                }
-            }
-            Spacer()
-            if field.fieldType == .time {
-                TimePickerInput(totalSeconds: timeBinding)
-            } else {
-                TextField(
-                    "",
-                    text: $value,
-                    prompt: Text("Enter \(field.fieldType.rawValue.lowercased())")
-                        .foregroundColor(Theme.textTertiary)
-                )
-                .font(.system(size: 15, weight: .heavy))
-                .foregroundColor(Theme.textPrimary)
-                .keyboardType(field.fieldType == .number ? .decimalPad : .default)
-                .multilineTextAlignment(.trailing)
-                .autocorrectionDisabled()
-                .focused(focusedField, equals: .custom(field.name))
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
     }
 }
 
