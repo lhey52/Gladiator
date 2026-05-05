@@ -5,6 +5,15 @@
 
 import SwiftUI
 
+private let zoneSheetCoordSpace = "zone-sheet"
+
+private struct ZoneFieldFramesKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
 struct ZoneMetricsSheet: View {
     let zone: CarZone
     let fields: [CustomField]
@@ -12,9 +21,14 @@ struct ZoneMetricsSheet: View {
     let onClose: () -> Void
 
     @FocusState private var focusedField: String?
+    @State private var activeNumberField: String?
+    @State private var fieldFrames: [String: CGRect] = [:]
 
     private var focusableNames: [String] {
-        fields.filter { $0.fieldType != .time }.map(\.name)
+        // Number fields use the custom bubble (not focused), and Time fields
+        // use a wheel picker (also not focused). Only Text fields participate
+        // in keyboard chevron navigation.
+        fields.filter { $0.fieldType == .text }.map(\.name)
     }
 
     var body: some View {
@@ -23,7 +37,22 @@ struct ZoneMetricsSheet: View {
                 Theme.background.ignoresSafeArea()
                     .dismissKeyboardOnTap()
                 content
+
+                if let activeName = activeNumberField,
+                   let field = fields.first(where: { $0.name == activeName }),
+                   let frame = fieldFrames[activeName] {
+                    NumberPadBubbleOverlay(
+                        anchorFrame: frame,
+                        text: bindingForField(field),
+                        onDismiss: { activeNumberField = nil },
+                        onNext: { advanceToNextNumberField(after: activeName) },
+                        isLastField: isLastNumberField(activeName)
+                    )
+                    .transition(.opacity)
+                }
             }
+            .coordinateSpace(name: zoneSheetCoordSpace)
+            .onPreferenceChange(ZoneFieldFramesKey.self) { fieldFrames = $0 }
             .navigationTitle(zone.displayName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
@@ -43,7 +72,12 @@ struct ZoneMetricsSheet: View {
                         ZoneMetricRow(
                             field: field,
                             value: bindingForField(field),
-                            focusedField: $focusedField
+                            focusedField: $focusedField,
+                            isActiveNumberField: activeNumberField == field.name,
+                            onTapNumberField: {
+                                focusedField = nil
+                                activeNumberField = field.name
+                            }
                         )
                         if index < fields.count - 1 {
                             Divider().background(Theme.hairline)
@@ -60,6 +94,7 @@ struct ZoneMetricsSheet: View {
                 )
                 .padding(20)
             }
+            .scrollDisabled(activeNumberField != nil)
         }
     }
 
@@ -98,12 +133,36 @@ struct ZoneMetricsSheet: View {
             set: { entries[field.name] = $0 }
         )
     }
+
+    private var orderedNumberFieldNames: [String] {
+        fields.filter { $0.fieldType == .number }.map(\.name)
+    }
+
+    private func isLastNumberField(_ name: String) -> Bool {
+        let names = orderedNumberFieldNames
+        guard let index = names.firstIndex(of: name) else { return true }
+        return index == names.count - 1
+    }
+
+    private func advanceToNextNumberField(after name: String) {
+        let names = orderedNumberFieldNames
+        guard let index = names.firstIndex(of: name),
+              index + 1 < names.count else {
+            // Defensive fallback: if there is no next field, just dismiss
+            // rather than leaving the bubble pinned to a stale anchor.
+            activeNumberField = nil
+            return
+        }
+        activeNumberField = names[index + 1]
+    }
 }
 
 private struct ZoneMetricRow: View {
     let field: CustomField
     @Binding var value: String
     var focusedField: FocusState<String?>.Binding
+    let isActiveNumberField: Bool
+    let onTapNumberField: () -> Void
 
     private var timeBinding: Binding<Double> {
         Binding(
@@ -131,25 +190,67 @@ private struct ZoneMetricRow: View {
                 }
             }
             Spacer()
-            if field.fieldType == .time {
-                TimePickerInput(totalSeconds: timeBinding)
-            } else {
-                TextField(
-                    "",
-                    text: $value,
-                    prompt: Text("Enter \(field.fieldType.rawValue.lowercased())")
-                        .foregroundColor(Theme.textTertiary)
-                )
-                .font(.system(size: 15, weight: .heavy))
-                .foregroundColor(Theme.textPrimary)
-                .keyboardType(field.fieldType == .number ? .decimalPad : .default)
-                .multilineTextAlignment(.trailing)
-                .autocorrectionDisabled()
-                .focused(focusedField, equals: field.name)
-            }
+            input
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
+    }
+
+    @ViewBuilder
+    private var input: some View {
+        switch field.fieldType {
+        case .time:
+            TimePickerInput(totalSeconds: timeBinding)
+        case .text:
+            TextField(
+                "",
+                text: $value,
+                prompt: Text("Enter \(field.fieldType.rawValue.lowercased())")
+                    .foregroundColor(Theme.textTertiary)
+            )
+            .font(.system(size: 15, weight: .heavy))
+            .foregroundColor(Theme.textPrimary)
+            .keyboardType(.default)
+            .multilineTextAlignment(.trailing)
+            .autocorrectionDisabled()
+            .focused(focusedField, equals: field.name)
+        case .number:
+            numberFieldButton
+        }
+    }
+
+    private var numberFieldButton: some View {
+        Button(action: onTapNumberField) {
+            Text(value.isEmpty ? "Enter number" : value)
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundColor(value.isEmpty ? Theme.textTertiary : Theme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(minWidth: 80, alignment: .trailing)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isActiveNumberField ? Theme.accent.opacity(0.15) : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(
+                            isActiveNumberField ? Theme.accent.opacity(0.6) : Theme.hairline,
+                            lineWidth: 1
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .preference(
+                        key: ZoneFieldFramesKey.self,
+                        value: [field.name: geo.frame(in: .named(zoneSheetCoordSpace))]
+                    )
+            }
+        )
     }
 }
 
