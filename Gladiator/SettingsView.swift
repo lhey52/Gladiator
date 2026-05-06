@@ -11,20 +11,18 @@ struct SettingsView: View {
     @AppStorage("settingsCustomizationTipDismissed") private var customizationTipDismissed: Bool = false
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if !customizationTipDismissed {
-                    customizationTip
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
-                        .padding(.bottom, 4)
-                }
-                settingsList
+        VStack(spacing: 0) {
+            if !customizationTipDismissed {
+                customizationTip
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
             }
-            .background(Theme.background)
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
+            settingsList
         }
+        .background(Theme.background)
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var customizationTip: some View {

@@ -15,11 +15,9 @@ struct SessionsView: View {
 
     @State private var searchText: String = ""
     @State private var typeFilter: SessionType? = nil
-    @State private var showingAdd: Bool = false
     @State private var isEditing: Bool = false
     @State private var selectedIDs: Set<PersistentIdentifier> = []
     @State private var showingDeleteConfirm: Bool = false
-    @State private var sessionCountBeforeSheet: Int = 0
     @State private var toastIcon: String = ""
     @State private var toastText: String = ""
     @State private var showToast: Bool = false
@@ -63,12 +61,12 @@ struct SessionsView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: showToast)
-            .navigationTitle("Sessions")
+            .navigationTitle("History")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 8) {
-                        Text("Sessions")
+                        Text("History")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(Theme.textPrimary)
                         ProBadgeIfNeeded()
@@ -98,18 +96,6 @@ struct SessionsView: View {
                                 .foregroundColor(selectedIDs.isEmpty ? Theme.textTertiary : Theme.accent)
                         }
                         .disabled(selectedIDs.isEmpty)
-                    } else {
-                        Button {
-                            if iap.checkSessionLimit(currentCount: sessions.count) {
-                                showingAdd = true
-                            } else {
-                                showingPaywall = true
-                            }
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(Theme.accent)
-                        }
                     }
                 }
             }
@@ -122,16 +108,6 @@ struct SessionsView: View {
                     deleteSelected()
                 }
                 Button("Cancel", role: .cancel) { }
-            }
-            .sheet(isPresented: $showingAdd, onDismiss: {
-                if sessions.count > sessionCountBeforeSheet {
-                    showToastBriefly(icon: "checkmark.circle.fill", text: "Session Saved")
-                }
-            }) {
-                AddSessionView()
-            }
-            .onChange(of: showingAdd) {
-                if showingAdd { sessionCountBeforeSheet = sessions.count }
             }
             .onChange(of: externalTypeFilter) {
                 if let filter = externalTypeFilter {
@@ -338,7 +314,7 @@ struct SessionsView: View {
                 .font(.system(size: 16, weight: .heavy))
                 .tracking(2)
                 .foregroundColor(Theme.textPrimary)
-            Text(sessions.isEmpty ? "Tap + to log your first session" : "Try a different search or filter")
+            Text(sessions.isEmpty ? "Log your first session in the New Session tab" : "Try a different search or filter")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Theme.textSecondary)
             Spacer()

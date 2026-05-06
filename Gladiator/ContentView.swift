@@ -56,7 +56,7 @@ struct ContentView: View {
         TabView(selection: $selection) {
             DashboardView(onSelectType: { type in
                     sessionsTypeFilter = type
-                    selection = 2
+                    selection = 3
                 })
                 .tabItem {
                     Label("Dashboard", systemImage: "gauge.open.with.lines.needle.33percent")
@@ -69,21 +69,21 @@ struct ContentView: View {
                 }
                 .tag(1)
 
-            SessionsView(externalTypeFilter: $sessionsTypeFilter)
+            AddSessionView()
                 .tabItem {
-                    Label("Sessions", systemImage: "flag.checkered")
+                    Label("New Session", systemImage: "plus.circle.fill")
                 }
                 .tag(2)
+
+            SessionsView(externalTypeFilter: $sessionsTypeFilter)
+                .tabItem {
+                    Label("History", systemImage: "flag.checkered")
+                }
+                .tag(3)
 
             PitView()
                 .tabItem {
                     Label("The Pit", systemImage: "wrench.and.screwdriver.fill")
-                }
-                .tag(3)
-//MARK setting icon was slider.horizontal.3
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
                 }
                 .tag(4)
         }

@@ -9,20 +9,16 @@ struct TutorialView: View {
     @Binding var isPresented: Bool
     @Binding var selectedTab: Int
     @State private var stage: Stage = .welcome
-    // Sub-phase within the Sessions step: 0 = tab icon, 1 = top-right plus button.
-    @State private var sessionsSubPhase: Int = 0
 
     private enum Stage: Equatable {
         case welcome
         case step(Int)
     }
 
-    private let sessionsStepIndex: Int = 2
-
     private let steps: [FirstLaunchTutorialStep] = [
         FirstLaunchTutorialStep(
             title: "Dashboard",
-            description: "Your Dashboard gives you a live overview of your racing data, recent sessions, and racing news.",
+            description: "Your Dashboard gives you a live overview of your racing data, recent sessions, and racing news. Tap the gear icon in the top right to open Settings.",
             tabIndex: 0
         ),
         FirstLaunchTutorialStep(
@@ -31,23 +27,21 @@ struct TutorialView: View {
             tabIndex: 1
         ),
         FirstLaunchTutorialStep(
-            title: "Sessions",
-            description: "Log your race sessions here. The more sessions you record, the more powerful your analytics become.",
+            title: "New Session",
+            description: "Log a new race session here. The more sessions you record, the more powerful your analytics become.",
             tabIndex: 2
+        ),
+        FirstLaunchTutorialStep(
+            title: "History",
+            description: "Review and manage every session you have logged. Search, filter by type, and tap any session to dive into its details.",
+            tabIndex: 3
         ),
         FirstLaunchTutorialStep(
             title: "The Pit",
             description: "The Pit is your personal space for notes, checklists, goals and reminders.",
-            tabIndex: 3
-        ),
-        FirstLaunchTutorialStep(
-            title: "Settings",
-            description: "In Settings, use Session Customization to manage your tracks, vehicles, and metrics. Replay this tutorial anytime by going to Reset in your Settings",
             tabIndex: 4
         )
     ]
-
-    private let sessionsAddButtonDescription = "Tap the + button to log a new session. The more sessions you record, the more powerful your analytics become."
 
     var body: some View {
         ZStack {
@@ -68,8 +62,8 @@ struct TutorialView: View {
         if let step = steps[safe: index] {
             TutorialOverlayView(
                 title: step.title,
-                description: descriptionFor(step: step, index: index),
-                spotlight: spotlightFor(step: step, index: index),
+                description: step.description,
+                spotlight: .tab(index: step.tabIndex, total: 5),
                 stepIndex: index,
                 totalSteps: steps.count,
                 isLastStep: index == steps.count - 1,
@@ -77,20 +71,6 @@ struct TutorialView: View {
                 onSkip: { complete() }
             )
         }
-    }
-
-    private func descriptionFor(step: FirstLaunchTutorialStep, index: Int) -> String {
-        if index == sessionsStepIndex && sessionsSubPhase == 1 {
-            return sessionsAddButtonDescription
-        }
-        return step.description
-    }
-
-    private func spotlightFor(step: FirstLaunchTutorialStep, index: Int) -> TutorialSpotlight {
-        if index == sessionsStepIndex && sessionsSubPhase == 1 {
-            return .topRightPlusButton
-        }
-        return .tab(index: step.tabIndex, total: 5)
     }
 
     private var welcomeLayer: some View {
@@ -189,12 +169,6 @@ struct TutorialView: View {
         case .welcome:
             setStage(.step(0))
         case .step(let i):
-            // Within the Sessions step, advance through the sub-phase before moving on.
-            if i == sessionsStepIndex && sessionsSubPhase == 0 {
-                sessionsSubPhase = 1
-                return
-            }
-            sessionsSubPhase = 0
             if i + 1 >= steps.count {
                 complete()
             } else {

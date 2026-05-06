@@ -140,15 +140,21 @@ struct DashboardView: View {
                     .foregroundColor(Theme.textPrimary)
             }
             Spacer()
-            ZStack {
-                Circle().fill(Theme.surface).frame(width: 44, height: 44)
-                Circle()
-                    .stroke(Theme.accent.opacity(0.6), lineWidth: 1)
-                    .frame(width: 44, height: 44)
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(Theme.accent)
+            NavigationLink {
+                SettingsView()
+            } label: {
+                ZStack {
+                    Circle().fill(Theme.surface).frame(width: 44, height: 44)
+                    Circle()
+                        .stroke(Theme.accent.opacity(0.6), lineWidth: 1)
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Theme.accent)
+                }
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
         }
         .padding(.top, 8)
     }

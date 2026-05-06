@@ -12,13 +12,15 @@ private enum SessionFormField: Hashable {
 
 struct AddSessionView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
     @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
     private var customFields: [CustomField]
     @Query(sort: [SortDescriptor(\Track.name)])
     private var tracks: [Track]
     @Query(sort: [SortDescriptor(\Vehicle.name)])
     private var vehicles: [Vehicle]
+    @Query(sort: [SortDescriptor(\Session.date, order: .reverse)])
+    private var sessions: [Session]
+    @ObservedObject private var iap = IAPManager.shared
 
     @AppStorage("sessionFormTipDismissed") private var tipDismissed: Bool = false
     @AppStorage("sessionProgressBarEnabled") private var progressBarEnabled: Bool = true
@@ -31,6 +33,11 @@ struct AddSessionView: View {
     @State private var fieldEntries: [String: String] = [:]
     @State private var activeZone: CarZone?
     @State private var pitSheetPresented: Bool = false
+    @State private var showingPaywall: Bool = false
+    @State private var showingResetConfirm: Bool = false
+    @State private var toastIcon: String = ""
+    @State private var toastText: String = ""
+    @State private var showToast: Bool = false
     @FocusState private var focusedField: SessionFormField?
 
     private var canSave: Bool {
@@ -71,11 +78,35 @@ struct AddSessionView: View {
                     }
                     formScroll
                 }
+
+                if showToast {
+                    VStack {
+                        Spacer()
+                        ToastView(icon: toastIcon, text: toastText)
+                            .transition(.opacity)
+                            .padding(.bottom, 16)
+                    }
+                    .allowsHitTesting(false)
+                }
             }
+            .animation(.easeInOut(duration: 0.25), value: showToast)
             .navigationTitle("New Session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { navToolbar }
             .keyboardToolbar(focusedField: $focusedField, fields: allFields)
+            .confirmationDialog(
+                "Reset this session?",
+                isPresented: $showingResetConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Reset", role: .destructive) { resetForm() }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("All entered data will be cleared.")
+            }
+            .fullScreenCover(isPresented: $showingPaywall) {
+                PaywallView(limitMessage: "You have reached the free limit of \(IAPManager.sessionLimit) sessions. Upgrade to Pro for unlimited sessions.")
+            }
         }
         .preferredColorScheme(.dark)
         .sheet(item: $activeZone) { zone in
@@ -104,14 +135,43 @@ struct AddSessionView: View {
             .presentationDragIndicator(.visible)
         }
         .onAppear {
-            guard !didLoadDefault else { return }
-            didLoadDefault = true
-            if let defaultTrack = tracks.first(where: { $0.isDefault }) {
-                trackName = defaultTrack.name
+            if !didLoadDefault {
+                didLoadDefault = true
+                loadDefaults()
             }
-            if let defaultVehicle = vehicles.first(where: { $0.isDefault }) {
-                vehicleName = defaultVehicle.name
+            if !iap.checkSessionLimit(currentCount: sessions.count) {
+                showingPaywall = true
             }
+        }
+    }
+
+    private func loadDefaults() {
+        if let defaultTrack = tracks.first(where: { $0.isDefault }) {
+            trackName = defaultTrack.name
+        }
+        if let defaultVehicle = vehicles.first(where: { $0.isDefault }) {
+            vehicleName = defaultVehicle.name
+        }
+    }
+
+    private func resetForm() {
+        focusedField = nil
+        date = .now
+        trackName = ""
+        vehicleName = ""
+        sessionType = .practice
+        notes = ""
+        fieldEntries = [:]
+        loadDefaults()
+    }
+
+    private func showToastBriefly(icon: String, text: String) {
+        toastIcon = icon
+        toastText = text
+        showToast = true
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            showToast = false
         }
     }
 
@@ -206,8 +266,14 @@ struct AddSessionView: View {
     @ToolbarContentBuilder
     private var navToolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel") { dismiss() }
-                .foregroundColor(Theme.textSecondary)
+            Button {
+                showingResetConfirm = true
+            } label: {
+                Image(systemName: "arrow.counterclockwise.circle.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(Theme.accent)
+            }
+            .accessibilityLabel("Reset session")
         }
         ToolbarItem(placement: .confirmationAction) {
             Button("Save", action: save)
@@ -335,6 +401,10 @@ struct AddSessionView: View {
     }
 
     private func save() {
+        guard iap.checkSessionLimit(currentCount: sessions.count) else {
+            showingPaywall = true
+            return
+        }
         let session = Session(
             date: date,
             trackName: trackName.trimmingCharacters(in: .whitespaces),
@@ -352,7 +422,8 @@ struct AddSessionView: View {
             modelContext.insert(fv)
         }
 
-        dismiss()
+        resetForm()
+        showToastBriefly(icon: "checkmark.circle.fill", text: "Session Saved")
     }
 }
 
