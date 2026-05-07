@@ -214,7 +214,7 @@ struct AddSessionView: View {
     // directions so users can keep stepping forward without thinking
     // about edges.
     private static let zoneNavigationOrder: [CarZone] = [
-        .front, .flTire, .frTire, .cockpit, .engine, .blTire, .brTire, .rear
+        .flTire, .frTire, .cockpit, .engine, .blTire, .brTire
     ]
 
     private func zoneNeighbor(of zone: CarZone, offset: Int) -> CarZone {

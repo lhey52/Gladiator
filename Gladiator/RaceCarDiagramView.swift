@@ -75,8 +75,6 @@ struct RaceCarDiagramView: View {
 
     static func layout(for zone: CarZone) -> (center: CGPoint, size: CGSize) {
         switch zone {
-        case .front:
-            return (CGPoint(x: 0.50, y: 0.05), CGSize(width: 0.86, height: 0.055))
         case .flTire:
             return (CGPoint(x: 0.13, y: 0.22), CGSize(width: 0.20, height: 0.13))
         case .frTire:
@@ -89,8 +87,6 @@ struct RaceCarDiagramView: View {
             return (CGPoint(x: 0.13, y: 0.78), CGSize(width: 0.20, height: 0.13))
         case .brTire:
             return (CGPoint(x: 0.87, y: 0.78), CGSize(width: 0.20, height: 0.13))
-        case .rear:
-            return (CGPoint(x: 0.50, y: 0.955), CGSize(width: 0.96, height: 0.065))
         case .general:
             return (CGPoint.zero, CGSize.zero)
         }
@@ -100,7 +96,10 @@ struct RaceCarDiagramView: View {
 // MARK: - Unified blueprint geometry
 
 private enum BlueprintGeometry {
-    // Front/rear bumper rects in normalized coords (match RaceCarDiagramView.layout).
+    // Front/rear wing rects in normalized coords. Drawn as separate rounded
+    // rects so a small visible gap remains between the wings and the body —
+    // they're decorative-only now (no zone interaction) but still rendered
+    // as discrete shapes per the F1 silhouette aesthetic.
     static let frontBumper = CGRect(x: 0.07, y: 0.0225, width: 0.86, height: 0.055)
     static let rearBumper = CGRect(x: 0.02, y: 0.9225, width: 0.96, height: 0.065)
     static let bumperCorner: CGFloat = 4
@@ -330,7 +329,6 @@ private struct ZoneCell: View {
     private var cornerRadius: CGFloat {
         switch zone {
         case .flTire, .frTire, .blTire, .brTire: return 6
-        case .front, .rear: return 4
         case .cockpit: return 22
         case .engine: return 14
         case .general: return 6
@@ -358,38 +356,21 @@ private struct ZoneCell: View {
         }
     }
 
-    @ViewBuilder
     private var content: some View {
-        switch zone {
-        case .front, .rear:
-            HStack(spacing: 6) {
-                Text(zone.displayName.uppercased())
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(1.2)
-                    .foregroundColor(labelColor)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                if state.hasMetrics {
-                    counterPill
-                }
+        VStack(spacing: 3) {
+            Text(zone.displayName.uppercased())
+                .font(.system(size: 9, weight: .heavy))
+                .tracking(0.8)
+                .foregroundColor(labelColor)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.6)
+            if state.hasMetrics {
+                counterPill
             }
-            .padding(.horizontal, 8)
-        default:
-            VStack(spacing: 3) {
-                Text(zone.displayName.uppercased())
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(0.8)
-                    .foregroundColor(labelColor)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .minimumScaleFactor(0.6)
-                if state.hasMetrics {
-                    counterPill
-                }
-            }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
         }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
     }
 
     private var counterPill: some View {
@@ -418,8 +399,7 @@ private struct ZoneCell: View {
                 .frTire: ZoneFillState(filled: 1, total: 2),
                 .blTire: ZoneFillState(filled: 0, total: 1),
                 .engine: ZoneFillState(filled: 3, total: 3),
-                .cockpit: ZoneFillState(filled: 1, total: 4),
-                .front: ZoneFillState(filled: 0, total: 1)
+                .cockpit: ZoneFillState(filled: 1, total: 4)
             ],
             onTapZone: { _ in }
         )

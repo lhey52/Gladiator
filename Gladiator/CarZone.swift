@@ -9,15 +9,15 @@ enum CarZone: String, CaseIterable, Codable, Identifiable {
     // Raw values are kept as-is for SwiftData storage compatibility — existing
     // CustomField.zoneRaw rows persist their original strings. User-facing
     // labels are surfaced via displayName below so they can evolve without
-    // breaking persistence.
+    // breaking persistence. Legacy "Front" / "Rear" rawValues self-migrate
+    // to .general via the `CarZone(rawValue:) ?? .general` fallback in
+    // CustomField.zone now that those cases are gone.
     case flTire = "FL Tire"
     case frTire = "FR Tire"
     case blTire = "BL Tire"
     case brTire = "BR Tire"
     case engine = "Engine"
     case cockpit = "Cockpit"
-    case front = "Front"
-    case rear = "Rear"
     case general = "General"
 
     var id: String { rawValue }
@@ -30,20 +30,18 @@ enum CarZone: String, CaseIterable, Codable, Identifiable {
         case .brTire: return "Back Right"
         case .engine: return "Engine and Drivetrain"
         case .cockpit: return "Cockpit"
-        case .front: return "Front"
-        case .rear: return "Back"
         case .general: return "General"
         }
     }
 
     static let pickerOrder: [CarZone] = [
         .flTire, .frTire, .blTire, .brTire,
-        .engine, .cockpit, .front, .rear,
+        .engine, .cockpit,
         .general
     ]
 
     static let carZones: [CarZone] = [
         .flTire, .frTire, .blTire, .brTire,
-        .engine, .cockpit, .front, .rear
+        .engine, .cockpit
     ]
 }
