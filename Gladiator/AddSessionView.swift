@@ -6,8 +6,18 @@
 import SwiftUI
 import SwiftData
 
+private let addSessionCoordSpace = "add-session"
+
+private struct AddSessionFieldFramesKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
 private enum SessionFormField: Hashable {
     case notes
+    case pitText(String)
 }
 
 struct AddSessionView: View {
@@ -32,12 +42,15 @@ struct AddSessionView: View {
     @State private var notes: String = ""
     @State private var fieldEntries: [String: String] = [:]
     @State private var activeZone: CarZone?
-    @State private var pitSheetPresented: Bool = false
+    @State private var activeNumberField: String?
+    @State private var fieldFrames: [String: CGRect] = [:]
     @State private var showingPaywall: Bool = false
     @State private var showingResetConfirm: Bool = false
     @State private var toastIcon: String = ""
     @State private var toastText: String = ""
     @State private var showToast: Bool = false
+    @State private var isPitBoxExpanded: Bool = false
+    @State private var isNotesExpanded: Bool = false
     @FocusState private var focusedField: SessionFormField?
 
     private var canSave: Bool {
@@ -45,10 +58,14 @@ struct AddSessionView: View {
     }
 
     private var allFields: [SessionFormField] {
-        // Only the inline notes editor is focusable on the form root —
-        // metric inputs live inside the zone and pit-box sheets and have
-        // their own focus state.
-        [.notes]
+        // Pit-box text fields are now inline on the form root, so they
+        // join Notes in the keyboard chevron walk. Number/Time fields use
+        // the bubble pad / wheel and don't take focus.
+        var fields: [SessionFormField] = generalFields
+            .filter { $0.fieldType == .text }
+            .map { .pitText($0.name) }
+        fields.append(.notes)
+        return fields
     }
 
     private var generalFields: [CustomField] {
@@ -88,7 +105,20 @@ struct AddSessionView: View {
                     }
                     .allowsHitTesting(false)
                 }
+
+                if let activeName = activeNumberField,
+                   let field = generalFields.first(where: { $0.name == activeName }),
+                   let frame = fieldFrames[activeName] {
+                    NumberPadBubbleOverlay(
+                        anchorFrame: frame,
+                        text: bindingForField(field),
+                        onDismiss: { activeNumberField = nil }
+                    )
+                    .transition(.opacity)
+                }
             }
+            .coordinateSpace(name: addSessionCoordSpace)
+            .onPreferenceChange(AddSessionFieldFramesKey.self) { fieldFrames = $0 }
             .animation(.easeInOut(duration: 0.25), value: showToast)
             .navigationTitle("New Session")
             .navigationBarTitleDisplayMode(.inline)
@@ -119,21 +149,6 @@ struct AddSessionView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $pitSheetPresented) {
-            PitInfoSheet(
-                date: $date,
-                trackName: $trackName,
-                vehicleName: $vehicleName,
-                sessionType: $sessionType,
-                tracks: tracks,
-                vehicles: vehicles,
-                generalFields: generalFields,
-                entries: $fieldEntries,
-                onClose: { pitSheetPresented = false }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
         .onAppear {
             if !didLoadDefault {
                 didLoadDefault = true
@@ -156,12 +171,15 @@ struct AddSessionView: View {
 
     private func resetForm() {
         focusedField = nil
+        activeNumberField = nil
         date = .now
         trackName = ""
         vehicleName = ""
         sessionType = .practice
         notes = ""
         fieldEntries = [:]
+        isPitBoxExpanded = false
+        isNotesExpanded = false
         loadDefaults()
     }
 
@@ -223,14 +241,15 @@ struct AddSessionView: View {
     private var formScroll: some View {
         ScrollView {
             VStack(spacing: 18) {
-                raceCarSection
+                setupCard
                 if !tipDismissed {
                     sessionFormTip
                 }
-                notesCard
+                raceCarSection
             }
             .padding(20)
         }
+        .scrollDisabled(activeNumberField != nil)
     }
 
     private var sessionFormTip: some View {
@@ -288,9 +307,6 @@ struct AddSessionView: View {
     private var raceCarSection: some View {
         VStack(spacing: 0) {
             cardHeader("ZONES")
-            pitBoxElement
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
             RaceCarDiagramView(
                 zoneStates: zoneStates,
                 onTapZone: { zone in
@@ -311,37 +327,6 @@ struct AddSessionView: View {
         )
     }
 
-    private var pitBoxElement: some View {
-        Button {
-            focusedField = nil
-            pitSheetPresented = true
-        } label: {
-            VStack(spacing: 2) {
-                Text("PIT BOX")
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(1.8)
-                    .foregroundColor(Theme.accent)
-                Text("TRACK · VEHICLE · GENERAL")
-                    .font(.system(size: 8, weight: .heavy))
-                    .tracking(1.2)
-                    .foregroundColor(Theme.textSecondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 18)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Theme.accent.opacity(0.10))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Theme.accent.opacity(0.50), lineWidth: 1.5)
-            )
-            .shadow(color: Theme.accent.opacity(0.20), radius: 6)
-        }
-        .buttonStyle(.plain)
-    }
-
     private func cardHeader(_ text: String) -> some View {
         HStack {
             Text(text)
@@ -355,42 +340,281 @@ struct AddSessionView: View {
         .padding(.bottom, 10)
     }
 
-    // MARK: - Notes card
+    // MARK: - Setup card (Pit Box + Notes)
 
-    private var notesCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("NOTES")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.8)
-                .foregroundColor(Theme.accent)
-
-            ZStack(alignment: .topLeading) {
-                if notes.isEmpty {
-                    Text("Setup, conditions, thoughts…")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Theme.textTertiary)
-                        .padding(.top, 8)
-                        .padding(.leading, 4)
-                        .allowsHitTesting(false)
-                }
-                TextEditor(text: $notes)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Theme.textPrimary)
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 120)
-                    .focused($focusedField, equals: .notes)
-            }
+    private var setupCard: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            pitBoxSection
+            Divider().background(Theme.hairline)
+            notesSection
         }
-        .padding(16)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.surface)
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
         )
+        .shadow(color: Theme.accent.opacity(0.15), radius: 16)
+    }
+
+    private func collapsibleHeader(
+        title: String,
+        systemImage: String,
+        isExpanded: Bool,
+        toggle: @escaping () -> Void
+    ) -> some View {
+        Button(action: toggle) {
+            HStack {
+                Label(title, systemImage: systemImage)
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.accent)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .heavy))
+                    .foregroundColor(Theme.accent)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var pitBoxSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            collapsibleHeader(
+                title: "PIT BOX",
+                systemImage: "shippingbox.fill",
+                isExpanded: isPitBoxExpanded
+            ) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    if isPitBoxExpanded { activeNumberField = nil }
+                    isPitBoxExpanded.toggle()
+                }
+            }
+
+            if isPitBoxExpanded {
+                pitBoxFields
+            }
+        }
+    }
+
+    private var pitBoxFields: some View {
+        VStack(spacing: 0) {
+            typeChips
+                .padding(.bottom, 6)
+            pitInfoRow(label: "TRACK") {
+                Picker("", selection: $trackName) {
+                    Text("Select Track")
+                        .foregroundColor(Theme.textTertiary)
+                        .tag("")
+                    ForEach(tracks) { track in
+                        Text(track.name).tag(track.name)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(Theme.accent)
+                .labelsHidden()
+            }
+            pitInfoRow(label: "VEHICLE") {
+                Picker("", selection: $vehicleName) {
+                    Text("Select Vehicle")
+                        .foregroundColor(Theme.textTertiary)
+                        .tag("")
+                    ForEach(vehicles) { vehicle in
+                        Text(vehicle.name).tag(vehicle.name)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(Theme.accent)
+                .labelsHidden()
+            }
+            pitInfoRow(label: "DATE") {
+                DatePicker(
+                    "",
+                    selection: $date,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .tint(Theme.accent)
+                .colorScheme(.dark)
+            }
+            ForEach(generalFields) { field in
+                pitMetricRow(field: field)
+            }
+        }
+    }
+
+    private var typeChips: some View {
+        HStack(spacing: 8) {
+            ForEach(SessionType.allCases) { type in
+                typeChip(type)
+            }
+        }
+    }
+
+    private func typeChip(_ type: SessionType) -> some View {
+        let isSelected = sessionType == type
+        return Button {
+            sessionType = type
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: type.systemImage)
+                    .font(.system(size: 11, weight: .bold))
+                Text(type.rawValue.uppercased())
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .allowsTightening(true)
+            }
+            .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                Capsule().fill(isSelected ? Theme.accent.opacity(0.15) : Theme.surface)
+            )
+            .overlay(
+                Capsule().stroke(isSelected ? Theme.accent.opacity(0.5) : Theme.hairline, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func pitInfoRow<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            Spacer()
+            content()
+        }
+        .padding(.vertical, 12)
+    }
+
+    private func pitMetricRow(field: CustomField) -> some View {
+        let parts = CustomField.split(name: field.name)
+        return HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(parts.name.uppercased())
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+                if !parts.unit.isEmpty {
+                    Text(parts.unit)
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundColor(Theme.textTertiary)
+                }
+            }
+            Spacer()
+            pitMetricInput(field: field)
+        }
+        .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private func pitMetricInput(field: CustomField) -> some View {
+        switch field.fieldType {
+        case .time:
+            let timeBinding = Binding<Double>(
+                get: { Double(fieldEntries[field.name, default: ""]) ?? 0 },
+                set: { fieldEntries[field.name] = String($0) }
+            )
+            TimePickerInput(totalSeconds: timeBinding)
+        case .text:
+            TextField(
+                "",
+                text: bindingForField(field),
+                prompt: Text("Enter text").foregroundColor(Theme.textTertiary)
+            )
+            .font(.system(size: 15, weight: .heavy))
+            .foregroundColor(Theme.textPrimary)
+            .keyboardType(.default)
+            .multilineTextAlignment(.trailing)
+            .autocorrectionDisabled()
+            .focused($focusedField, equals: .pitText(field.name))
+        case .number:
+            pitNumberFieldButton(field: field)
+        }
+    }
+
+    private func pitNumberFieldButton(field: CustomField) -> some View {
+        let raw = fieldEntries[field.name, default: ""]
+        let isActive = activeNumberField == field.name
+        return Button {
+            focusedField = nil
+            activeNumberField = field.name
+        } label: {
+            Text(raw.isEmpty ? "Enter number" : raw)
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundColor(raw.isEmpty ? Theme.textTertiary : Theme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(minWidth: 80, alignment: .trailing)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isActive ? Theme.accent.opacity(0.15) : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(
+                            isActive ? Theme.accent.opacity(0.6) : Theme.hairline,
+                            lineWidth: 1
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .preference(
+                        key: AddSessionFieldFramesKey.self,
+                        value: [field.name: geo.frame(in: .named(addSessionCoordSpace))]
+                    )
+            }
+        )
+    }
+
+    private var notesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            collapsibleHeader(
+                title: "NOTES",
+                systemImage: "note.text",
+                isExpanded: isNotesExpanded
+            ) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isNotesExpanded.toggle()
+                }
+            }
+
+            if isNotesExpanded {
+                ZStack(alignment: .topLeading) {
+                    if notes.isEmpty {
+                        Text("Setup, conditions, thoughts…")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Theme.textTertiary)
+                            .padding(.top, 8)
+                            .padding(.leading, 4)
+                            .allowsHitTesting(false)
+                    }
+                    TextEditor(text: $notes)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Theme.textPrimary)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 120)
+                        .focused($focusedField, equals: .notes)
+                }
+            }
+        }
     }
 
     private func bindingForField(_ field: CustomField) -> Binding<String> {
