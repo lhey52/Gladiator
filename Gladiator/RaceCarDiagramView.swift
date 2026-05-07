@@ -37,6 +37,14 @@ struct RaceCarDiagramView: View {
 
                 centerlineDivider(size: size)
 
+                // Axle stubs that read as the body outline continuing out
+                // to each tire — only filling the gap between the chassis
+                // curve and the tire's inner edge, so nothing crosses the
+                // body interior. Same chassisLine color as the chassis
+                // stroke for visual continuity.
+                axleStubs(yRatio: 0.22, chassisRightX: 0.695, chassisLeftX: 0.305, in: size)
+                axleStubs(yRatio: 0.78, chassisRightX: 0.719, chassisLeftX: 0.281, in: size)
+
                 ForEach(CarZone.carZones) { zone in
                     let layout = RaceCarDiagramView.layout(for: zone)
                     zoneCellView(for: zone)
@@ -74,8 +82,58 @@ struct RaceCarDiagramView: View {
     private func centerlineDivider(size: CGSize) -> some View {
         Rectangle()
             .fill(Theme.chassisLine)
-            .frame(width: size.width * 0.005, height: size.height * 0.50)
+            .frame(width: 1, height: size.height * 0.50)
             .position(x: size.width * 0.5, y: size.height * 0.50)
+    }
+
+    @ViewBuilder
+    private func axleStubs(
+        yRatio: CGFloat,
+        chassisRightX: CGFloat,
+        chassisLeftX: CGFloat,
+        in size: CGSize
+    ) -> some View {
+        // Right stub: chassis curve → FR/BR inner edge (x = 0.77)
+        axleStub(fromX: chassisRightX, toX: 0.77, yRatio: yRatio, in: size)
+        // Left stub: FL/BL inner edge (x = 0.23) → chassis curve
+        axleStub(fromX: 0.23, toX: chassisLeftX, yRatio: yRatio, in: size)
+    }
+
+    private func axleStub(
+        fromX: CGFloat,
+        toX: CGFloat,
+        yRatio: CGFloat,
+        in size: CGSize
+    ) -> some View {
+        let leftX = size.width * fromX
+        let rightX = size.width * toX
+        let stubW = rightX - leftX
+        let stubHRatio: CGFloat = 0.014
+        let stubH = size.height * stubHRatio
+
+        // Sample the body's full-height gradient at the stub's actual y by
+        // extending the gradient axis past the stub's bounds. Without this
+        // the stub would compress 0.04 → 0.10 into its own 0.014 of height
+        // and read as a separate object stitched on.
+        let stubTopRatio = yRatio - stubHRatio / 2
+        let gradientStartY = -stubTopRatio / stubHRatio
+        let gradientEndY = (1 - stubTopRatio) / stubHRatio
+        let bodyMatchedFill = LinearGradient(
+            colors: [Theme.chassisFillTop, Theme.chassisFillBottom],
+            startPoint: UnitPoint(x: 0.5, y: gradientStartY),
+            endPoint: UnitPoint(x: 0.5, y: gradientEndY)
+        )
+
+        return Rectangle()
+            .fill(bodyMatchedFill)
+            .overlay(alignment: .top) {
+                Rectangle().fill(Theme.chassisLine).frame(height: 1)
+            }
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(Theme.chassisLine).frame(height: 1)
+            }
+            .frame(width: stubW, height: stubH)
+            .position(x: (leftX + rightX) / 2, y: size.height * yRatio)
     }
 
     static func layout(for zone: CarZone) -> (center: CGPoint, size: CGSize) {
@@ -144,22 +202,33 @@ private struct ZoneCell: View {
     let state: ZoneFillState
     let action: () -> Void
 
-    private var fillColor: Color {
-        if state.isComplete { return Theme.accent.opacity(0.28) }
-        if state.isPartial { return Theme.accent.opacity(0.14) }
-        if state.hasMetrics { return Theme.accent.opacity(0.06) }
-        return Theme.surfaceElevated.opacity(0.6)
+    // Slice of the body's full-height chassisFillTop → chassisFillBottom
+    // gradient, sampled at this zone's actual y range. Same UnitPoint
+    // extension trick the axle stubs use, so each zone reads as part of
+    // the body silhouette rather than a separate tile.
+    private var fillStyle: LinearGradient {
+        let layout = RaceCarDiagramView.layout(for: zone)
+        let zoneH = layout.size.height
+        guard zoneH > 0 else {
+            return LinearGradient(
+                colors: [Theme.chassisFillBottom],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        let yTop = layout.center.y - zoneH / 2
+        let startY = -yTop / zoneH
+        let endY = (1 - yTop) / zoneH
+        return LinearGradient(
+            colors: [Theme.chassisFillTop, Theme.chassisFillBottom],
+            startPoint: UnitPoint(x: 0.5, y: startY),
+            endPoint: UnitPoint(x: 0.5, y: endY)
+        )
     }
 
-    private var strokeColor: Color {
-        if state.isComplete { return Theme.accent.opacity(0.85) }
-        if state.hasMetrics { return Theme.accent.opacity(0.45) }
-        return Theme.hairline
-    }
+    private var strokeColor: Color { Theme.chassisLine }
 
-    private var strokeWidth: CGFloat {
-        state.hasMetrics ? 1.6 : 1
-    }
+    private var strokeWidth: CGFloat { 1 }
 
     private var glowColor: Color {
         if state.isComplete { return Theme.accent.opacity(0.55) }
@@ -180,7 +249,7 @@ private struct ZoneCell: View {
         Button(action: action) {
             ZStack {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(fillColor)
+                    .fill(fillStyle)
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(strokeColor, lineWidth: strokeWidth)
                 tireTreads

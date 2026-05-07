@@ -20,10 +20,7 @@ enum Theme {
 
     // Race-car diagram blueprint tones. Scoped so bumping their visibility
     // doesn't leak into every other hairline-bordered surface in the app.
-    // Tinged with `accent` so the chassis sits in the same warm family as
-    // the zone fills, but at a lower tier than no-input (0.06) / partial
-    // (0.14) / complete (0.28) so the hierarchy stays readable.
-    static let chassisFillTop = accent.opacity(0.04)
-    static let chassisFillBottom = accent.opacity(0.10)
-    static let chassisLine = accent.opacity(0.14)
+    static let chassisFillTop = Color.white.opacity(0.04)
+    static let chassisFillBottom = Color.white.opacity(0.10)
+    static let chassisLine = Color.white.opacity(0.14)
 }
