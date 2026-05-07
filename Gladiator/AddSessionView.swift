@@ -405,13 +405,12 @@ struct AddSessionView: View {
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
         )
-        .shadow(color: Theme.accent.opacity(0.15), radius: 16)
     }
 
     private func collapsibleHeader(

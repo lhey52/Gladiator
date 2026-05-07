@@ -226,9 +226,13 @@ private struct ZoneCell: View {
         )
     }
 
-    private var strokeColor: Color { Theme.chassisLine }
+    private var strokeColor: Color {
+        state.filled > 0 ? Theme.accent : Theme.chassisLine
+    }
 
-    private var strokeWidth: CGFloat { 1 }
+    private var strokeWidth: CGFloat {
+        state.filled > 0 ? 1.5 : 1
+    }
 
     private var glowColor: Color {
         if state.isComplete { return Theme.accent.opacity(0.55) }
