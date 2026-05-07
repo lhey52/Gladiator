@@ -17,11 +17,16 @@ struct RaceEngineerView: View {
     @State private var filter = AnalyticsFilterState()
     @State private var showingFilter: Bool = false
     @State private var showingOutcomePicker: Bool = false
-    @State private var showingOutcomeTooltip: Bool = false
-    @State private var result: RaceEngineerOutcome?
-    @State private var isAnalyzing: Bool = false
+    @State private var sliderPosition: Double = 0.5
     @State private var showingPaywall: Bool = false
     @State private var isInitialLoading: Bool = true
+    @State private var showingDataSufficiencyDetail: Bool = false
+
+    @State private var hasAnalyzed: Bool = false
+    @State private var isAnalyzing: Bool = false
+    @State private var analysisCache: AnalysisCache?
+    @State private var panelCache: PanelCache?
+    @State private var debounceTask: Task<Void, Never>?
 
     @ObservedObject private var iap = IAPManager.shared
 
@@ -29,26 +34,18 @@ struct RaceEngineerView: View {
         allFields.filter { $0.fieldType.isPlottable }
     }
 
-    private var filteredSessions: [Session] {
-        filter.apply(to: sessions)
-    }
-
-    private var candidatePredictors: [String] {
-        plottableFields.map(\.name).filter { $0 != outcome }
-    }
-
-    private var fieldTypeMap: [String: FieldType] {
-        Dictionary(uniqueKeysWithValues: plottableFields.map { ($0.name, $0.fieldType) })
-    }
-
     private var canAnalyze: Bool {
-        !outcome.isEmpty && candidatePredictors.count >= 1 && !isAnalyzing
+        !outcome.isEmpty
+    }
+
+    private var outcomeFieldType: FieldType {
+        plottableFields.first { $0.name == outcome }?.fieldType ?? .number
     }
 
     var body: some View {
         if isInitialLoading {
             AnalyticsLoadingView(
-                toolName: "Race Engineer v2",
+                toolName: "Race Engineer",
                 sessionCount: sessions.count,
                 onComplete: { isInitialLoading = false }
             )
@@ -61,13 +58,12 @@ struct RaceEngineerView: View {
         NavigationStack {
             ZStack {
                 Theme.background.ignoresSafeArea()
-                    .dismissKeyboardOnTap()
                 lockedContent
                 if isAnalyzing {
                     analyzingOverlay
                 }
             }
-            .navigationTitle("Race Engineer v2")
+            .navigationTitle("Race Engineer")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -87,12 +83,20 @@ struct RaceEngineerView: View {
                 FilterSheetView(filter: filter)
             }
             .sheet(isPresented: $showingOutcomePicker) {
-                RaceEngineerFieldPicker(
-                    title: "Select Outcome",
+                RaceEngineerOutcomePicker(
                     fields: plottableFields,
                     selected: outcome
                 ) { name in
                     setOutcome(name)
+                }
+            }
+            .sheet(isPresented: $showingDataSufficiencyDetail) {
+                if let analysis = analysisCache {
+                    RaceEngineerDataSufficiencyDetail(
+                        level: DataSufficiencyLevel.from(sampleSize: analysis.sortedSnapshots.count),
+                        sampleSize: analysis.sortedSnapshots.count,
+                        outcome: outcome
+                    )
                 }
             }
             .fullScreenCover(isPresented: $showingPaywall) {
@@ -138,19 +142,25 @@ struct RaceEngineerView: View {
 
     @ViewBuilder
     private var mainContent: some View {
-        if plottableFields.count < 2 {
+        if plottableFields.isEmpty {
             emptyState(
                 icon: "chart.line.flattrend.xyaxis",
-                headline: "ADD 2+ METRICS",
-                message: "Race Engineer v2 needs at least 2 Number or Time metrics. Add more in Settings to unlock automatic setup analysis."
+                headline: "ADD A METRIC",
+                message: "Race Engineer needs at least one Number or Time metric. Add one in Settings to start comparing sessions."
             )
         } else {
             ScrollView {
                 VStack(spacing: 18) {
-                    ToolDescriptionCard(text: "Race Engineer v2 runs best subset selection across every Number and Time metric you log to automatically identify the combination with the strongest predictive power for your chosen metric. It then returns actionable, range-based setup targets drawn from your session history.")
+                    ToolDescriptionCard(text: "Compare your setup across sessions to identify what changes between your best and worst results.")
                     outcomeCard
                     analyzeButton
-                    resultSection
+                    if hasAnalyzed, let analysis = analysisCache {
+                        if analysis.sortedSnapshots.count >= 4 {
+                            comparisonSection(analysis: analysis)
+                        } else {
+                            notEnoughDataCard
+                        }
+                    }
                 }
                 .padding(20)
             }
@@ -181,32 +191,10 @@ struct RaceEngineerView: View {
 
     private var outcomeCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Text("Select a metric analyze or improve:")
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(1.5)
-                    .foregroundColor(Theme.accent)
-                Button {
-                    showingOutcomeTooltip = true
-                } label: {
-                    Image(systemName: "questionmark.circle")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(Theme.accent)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showingOutcomeTooltip) {
-                    Text("Best results come from choosing performance or condition outcomes, such as Race Time or Tire Temperature, rather than direct setup inputs you directly control, such as Tire Pressure or Fuel Load.")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Theme.textPrimary)
-                        .padding(16)
-                        .frame(width: 260)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .presentationCompactAdaptation(.popover)
-                        .presentationBackground(Theme.surface)
-                }
-                Spacer()
-            }
+            Text("Select an outcome metric to compare:")
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.accent)
 
             Button { showingOutcomePicker = true } label: {
                 HStack(spacing: 10) {
@@ -240,11 +228,6 @@ struct RaceEngineerView: View {
                 )
             }
             .buttonStyle(.plain)
-
-            Text("Race Engineer v2 will test every combination of your other \(candidatePredictors.count) Number and Time metric\(candidatePredictors.count == 1 ? "" : "s") (up to \(BestSubsetEngine.maxSubsetSize) at once) and pick the combination with the highest Adjusted R².")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(Theme.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -264,9 +247,9 @@ struct RaceEngineerView: View {
             runAnalysis()
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "wand.and.stars")
+                Image(systemName: "rectangle.split.2x1.fill")
                     .font(.system(size: 13, weight: .heavy))
-                Text(isAnalyzing ? "ANALYZING…" : "ANALYZE")
+                Text("ANALYZE")
                     .font(.system(size: 14, weight: .heavy))
                     .tracking(1.5)
             }
@@ -295,11 +278,11 @@ struct RaceEngineerView: View {
                     .progressViewStyle(.circular)
                     .tint(Theme.accent)
                     .scaleEffect(1.4)
-                Text("RACE ENGINEER V2")
+                Text("RACE ENGINEER")
                     .font(.system(size: 13, weight: .heavy))
                     .tracking(2.5)
                     .foregroundColor(Theme.accent)
-                Text("Searching the best combination of metrics for \(outcome)…")
+                Text("Comparing sessions by \(outcome)…")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(Theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -309,46 +292,318 @@ struct RaceEngineerView: View {
         .transition(.opacity)
     }
 
-    // MARK: - Result section
+    // MARK: - Comparison section
 
     @ViewBuilder
-    private var resultSection: some View {
-        switch result {
-        case .none:
-            EmptyView()
-        case .success(let r):
-            RaceEngineerResultCard(result: r)
-        case .insufficientData(let n, let minimum):
-            warningCard(
-                icon: "exclamationmark.triangle",
-                headline: "NOT ENOUGH DATA",
-                message: "Race Engineer v2 needs at least \(minimum) session\(minimum == 1 ? "" : "s") per predictor to produce reliable results. You currently have \(n) session\(n == 1 ? "" : "s") with this outcome recorded. Add more sessions or relax your filters to run this analysis."
-            )
-        case .insufficientCandidates:
-            warningCard(
-                icon: "exclamationmark.triangle",
-                headline: "NOT ENOUGH METRICS",
-                message: "Race Engineer v2 needs at least one other Number or Time metric besides the outcome. Add more metrics in Settings."
-            )
-        case .noVariance:
-            warningCard(
-                icon: "exclamationmark.triangle",
-                headline: "NO VARIATION",
-                message: "The outcome has the same value in every analyzed session — there is nothing to predict. Add sessions with different outcome values."
-            )
+    private func comparisonSection(analysis: AnalysisCache) -> some View {
+        VStack(spacing: 14) {
+            dataSufficiencyRow(analysis: analysis)
+            sliderCard
+            if let panel = panelCache {
+                HStack(alignment: .top, spacing: 10) {
+                    comparisonPanel(side: .lower, analysis: analysis, panel: panel)
+                    comparisonPanel(side: .higher, analysis: analysis, panel: panel)
+                }
+            }
         }
     }
 
-    private func warningCard(icon: String, headline: String, message: String) -> some View {
+    // Sample size = sessions with the chosen outcome value present, after
+    // the analytics filter is applied. Mirrors the way Correlation Analysis
+    // counts samples for its own DataSufficiencyLevel computation.
+    private func dataSufficiencyRow(analysis: AnalysisCache) -> some View {
+        let level = DataSufficiencyLevel.from(sampleSize: analysis.sortedSnapshots.count)
+        return Button {
+            showingDataSufficiencyDetail = true
+        } label: {
+            HStack(spacing: 8) {
+                Label("DATA SUFFICIENCY", systemImage: "square.stack.3d.up.fill")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.accent)
+                Spacer()
+                DataSufficiencyBadge(level: level)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Theme.textTertiary)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Theme.hairline, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Slider card
+
+    private var sliderCard: some View {
+        // Outcome name remains as the slider's title — the live percentage
+        // and session-count labels now live in each panel's header instead.
+        VStack(spacing: 14) {
+            Text(outcome)
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundColor(Theme.textPrimary)
+                .frame(maxWidth: .infinity)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            sliderControl
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    // Uniform grey track with 9 evenly spaced tick marks (every 10%) and a
+    // vertical pill thumb that protrudes past the top and bottom of the
+    // track. Drag updates feed `sliderPosition`, which the existing
+    // .onChange wires into the debounced panel refresh.
+    private var sliderControl: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let trackHeight: CGFloat = 6
+            let thumbWidth: CGFloat = 6
+            let thumbHeight: CGFloat = 28
+            let containerHeight: CGFloat = thumbHeight
+            let thumbX = max(0, min(width, width * sliderPosition))
+
+            ZStack {
+                Capsule()
+                    .fill(Theme.textTertiary)
+                    .frame(width: width, height: trackHeight)
+
+                ForEach(1..<10, id: \.self) { i in
+                    let pct = CGFloat(i) / 10.0
+                    Rectangle()
+                        .fill(Theme.surface)
+                        .frame(width: 1, height: trackHeight)
+                        .position(x: width * pct, y: containerHeight / 2)
+                }
+
+                RoundedRectangle(cornerRadius: thumbWidth / 2, style: .continuous)
+                    .fill(Theme.accent)
+                    .frame(width: thumbWidth, height: thumbHeight)
+                    .shadow(color: Theme.accent.opacity(0.5), radius: 6)
+                    .position(x: thumbX, y: containerHeight / 2)
+            }
+            .frame(width: width, height: containerHeight)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let new = max(0, min(1, value.location.x / width))
+                        if new != sliderPosition {
+                            sliderPosition = new
+                        }
+                    }
+            )
+        }
+        .frame(height: 28)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Lower / higher split")
+        .accessibilityValue("\(Int(round(sliderPosition * 100)))% lower, \(Int(round((1 - sliderPosition) * 100)))% higher")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                sliderPosition = min(1, sliderPosition + 0.05)
+            case .decrement:
+                sliderPosition = max(0, sliderPosition - 0.05)
+            @unknown default:
+                break
+            }
+        }
+        .onChange(of: sliderPosition) { _, _ in
+            scheduleDebouncedPanelRefresh()
+        }
+    }
+
+    // MARK: - Panel
+
+    private func comparisonPanel(
+        side: PanelSide,
+        analysis: AnalysisCache,
+        panel: PanelCache
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            panelHeader(side: side, panel: panel)
+
+            Divider().background(Theme.hairline)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("SESSION AVERAGES")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+                outcomeRow(side: side, analysis: analysis, panel: panel)
+            }
+
+            if !panel.fieldOrder.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(panel.fieldOrder.enumerated()), id: \.element) { index, fieldName in
+                        metricRow(
+                            fieldName: fieldName,
+                            side: side,
+                            analysis: analysis,
+                            panel: panel
+                        )
+                        if index < panel.fieldOrder.count - 1 {
+                            Divider().background(Theme.hairline)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    // Lowest/Highest tag + live percentage + live session count. The
+    // percentage is driven directly off `sliderPosition` so it tracks the
+    // thumb in real time even while the panel averages below are
+    // debouncing. The count comes from `panel.splitIndex`, also live.
+    private func panelHeader(side: PanelSide, panel: PanelCache) -> some View {
+        let isLower = (side == .lower)
+        let pct = isLower
+            ? Int(round(sliderPosition * 100))
+            : 100 - Int(round(sliderPosition * 100))
+        let count = isLower
+            ? panel.splitIndex
+            : panel.totalSessions - panel.splitIndex
+
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(isLower ? "LOWEST" : "HIGHEST")
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            Text("\(pct)%")
+                .font(.system(size: 18, weight: .heavy, design: .rounded))
+                .foregroundColor(Theme.textPrimary)
+            Text("\(count) session\(count == 1 ? "" : "s")")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Theme.textSecondary)
+        }
+    }
+
+    private func outcomeRow(side: PanelSide, analysis: AnalysisCache, panel: PanelCache) -> some View {
+        let avg = side == .lower ? panel.leftOutcomeAvg : panel.rightOutcomeAvg
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(analysis.outcome.uppercased())
+                .font(.system(size: 9, weight: .heavy))
+                .tracking(1.2)
+                .foregroundColor(Theme.accent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            if let avg {
+                Text(formatValue(avg, fieldType: analysis.outcomeFieldType))
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .foregroundColor(Theme.accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            } else {
+                Text("—")
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .foregroundColor(Theme.textTertiary)
+            }
+        }
+    }
+
+    private func metricRow(
+        fieldName: String,
+        side: PanelSide,
+        analysis: AnalysisCache,
+        panel: PanelCache
+    ) -> some View {
+        let avg = side == .lower ? panel.leftAverages[fieldName] : panel.rightAverages[fieldName]
+        let fieldType = analysis.fieldTypes[fieldName] ?? .number
+        let display = avg.map { formatValue($0, fieldType: fieldType) } ?? "—"
+        let direction = direction(forFieldName: fieldName, side: side, panel: panel)
+
+        return VStack(alignment: .leading, spacing: 3) {
+            Text(fieldName.uppercased())
+                .font(.system(size: 9, weight: .heavy))
+                .tracking(1)
+                .foregroundColor(Theme.textSecondary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+            HStack(spacing: 4) {
+                Text(display)
+                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+                    .foregroundColor(avg == nil ? Theme.textTertiary : Theme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                directionGlyph(direction)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
+    }
+
+    // .up if this panel's average is higher than the other panel's, .down
+    // if lower, .none if the other side is missing a value or the two
+    // averages are equal.
+    private func direction(forFieldName name: String, side: PanelSide, panel: PanelCache) -> DirectionState {
+        guard let left = panel.leftAverages[name],
+              let right = panel.rightAverages[name] else {
+            return .none
+        }
+        if abs(left - right) < 1e-9 { return .none }
+        let thisSideHigher: Bool
+        switch side {
+        case .lower: thisSideHigher = left > right
+        case .higher: thisSideHigher = right > left
+        }
+        return thisSideHigher ? .up : .down
+    }
+
+    @ViewBuilder
+    private func directionGlyph(_ direction: DirectionState) -> some View {
+        switch direction {
+        case .up:
+            Image(systemName: "arrow.up")
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundColor(Theme.success)
+        case .down:
+            Image(systemName: "arrow.down")
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundColor(Theme.danger)
+        case .none:
+            Image(systemName: "minus")
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundColor(Theme.textTertiary)
+        }
+    }
+
+    // MARK: - Empty state
+
+    private var notEnoughDataCard: some View {
         VStack(spacing: 10) {
-            Image(systemName: icon)
+            Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(Theme.accent.opacity(0.8))
-            Text(headline)
+            Text("NOT ENOUGH SESSIONS")
                 .font(.system(size: 14, weight: .heavy))
                 .tracking(2)
                 .foregroundColor(Theme.textPrimary)
-            Text(message)
+            Text("Not enough sessions to compare. Log more sessions with \(outcome) recorded.")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -367,85 +622,356 @@ struct RaceEngineerView: View {
     // MARK: - Actions
 
     private func setOutcome(_ name: String) {
+        debounceTask?.cancel()
+        debounceTask = nil
         outcome = name
-        result = nil
+        hasAnalyzed = false
+        analysisCache = nil
+        panelCache = nil
     }
 
     private func runAnalysis() {
         guard canAnalyze else { return }
-        let outcomeName = outcome
-        let outcomeFieldType = plottableFields.first { $0.name == outcomeName }?.fieldType ?? .number
-        let predictors = candidatePredictors
-        let typeMap = fieldTypeMap
-        let sessionsSnapshot = filteredSessions
+        debounceTask?.cancel()
+        debounceTask = nil
 
-        result = nil
+        let outcomeName = outcome
+        let outcomeType = outcomeFieldType
+        let plottableSnapshot = plottableFields
+        let plottableNames = Set(plottableSnapshot.map(\.name))
+        let fieldNames = plottableSnapshot.filter { $0.name != outcomeName }.map(\.name)
+        let fieldTypes: [String: FieldType] = Dictionary(
+            uniqueKeysWithValues: plottableSnapshot.map { ($0.name, $0.fieldType) }
+        )
+        let criteria = FilterCriteria(
+            selectedTracks: filter.selectedTracks,
+            selectedVehicles: filter.selectedVehicles,
+            startDate: filter.startDate,
+            endDate: filter.endDate
+        )
+
+        // SwiftData @Model accessors aren't safe off the main actor, so the
+        // raw extraction has to happen here. Everything downstream operates
+        // on the resulting Sendable snapshots and runs on a background
+        // executor.
+        let snapshots: [SessionSnapshot] = sessions.map { session in
+            var values: [String: Double] = [:]
+            for fv in session.fieldValues where plottableNames.contains(fv.fieldName) {
+                let raw = fv.value.trimmingCharacters(in: .whitespaces)
+                guard !raw.isEmpty, let val = Double(raw) else { continue }
+                if fv.fieldType == .time, val == 0 { continue }
+                values[fv.fieldName] = val
+            }
+            return SessionSnapshot(
+                trackName: session.trackName,
+                vehicleName: session.vehicleName,
+                date: session.date,
+                numericValues: values
+            )
+        }
+
+        analysisCache = nil
+        panelCache = nil
+        hasAnalyzed = false
+        sliderPosition = 0.5
         withAnimation(.easeInOut(duration: 0.2)) { isAnalyzing = true }
 
         Task.detached(priority: .userInitiated) {
-            let outcomeCase = BestSubsetEngine.analyze(
-                sessions: sessionsSnapshot,
+            let cache = AnalysisCache.compute(
+                snapshots: snapshots,
+                filter: criteria,
                 outcome: outcomeName,
-                outcomeFieldType: outcomeFieldType,
-                candidatePredictors: predictors,
-                fieldTypes: typeMap
+                outcomeFieldType: outcomeType,
+                fieldNames: fieldNames,
+                fieldTypes: fieldTypes
             )
+            let panel = PanelCache.compute(from: cache, sliderPosition: 0.5)
             await MainActor.run {
-                result = outcomeCase
-                withAnimation(.easeInOut(duration: 0.2)) { isAnalyzing = false }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    analysisCache = cache
+                    panelCache = panel
+                    hasAnalyzed = true
+                    isAnalyzing = false
+                }
+            }
+        }
+    }
+
+    // Slider drag fires `onChange` continuously; debounce so we don't
+    // recompute the panels on every frame. Counts and thumb position
+    // remain reactive — only the heavier panel content waits.
+    private func scheduleDebouncedPanelRefresh() {
+        guard let cache = analysisCache else { return }
+        debounceTask?.cancel()
+        let position = sliderPosition
+        debounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            if Task.isCancelled { return }
+            let panel = await Task.detached(priority: .userInitiated) {
+                PanelCache.compute(from: cache, sliderPosition: position)
+            }.value
+            if Task.isCancelled { return }
+            panelCache = panel
+        }
+    }
+
+    // MARK: - Formatting
+
+    private func formatValue(_ value: Double, fieldType: FieldType) -> String {
+        switch fieldType {
+        case .time:
+            return TimeFormatting.secondsToDisplay(value)
+        case .number, .text:
+            let magnitude = abs(value)
+            if magnitude >= 100 {
+                return String(format: "%.1f", value)
+            } else if magnitude >= 10 {
+                return String(format: "%.2f", value)
+            } else {
+                return String(format: "%.3f", value)
             }
         }
     }
 }
 
-// MARK: - Result card
+// MARK: - Snapshots and caches
 
-private struct RaceEngineerResultCard: View {
-    let result: RaceEngineerResult
+private enum PanelSide {
+    case lower, higher
+}
 
-    @State private var isModelSummaryExpanded: Bool = false
-    @State private var isContributorsExpanded: Bool = false
-    @State private var isRecommendationsExpanded: Bool = false
-    @State private var isDataSufficiencyExpanded: Bool = false
+private enum DirectionState {
+    case up, down, none
+}
 
-    private var adjustedRSquaredPercent: Int {
-        Int((result.adjustedRSquared * 100).rounded())
-    }
+private struct SessionSnapshot: Sendable {
+    let trackName: String
+    let vehicleName: String
+    let date: Date
+    // Pre-parsed numeric values keyed by field name. Time fields with a raw
+    // value of 0 are dropped here so downstream code never has to special-
+    // case them.
+    let numericValues: [String: Double]
+}
 
-    private func sectionHeader(
-        title: String,
-        systemImage: String,
-        isExpanded: Bool,
-        toggle: @escaping () -> Void
-    ) -> some View {
-        Button(action: toggle) {
-            HStack {
-                Label(title, systemImage: systemImage)
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(1.5)
-                    .foregroundColor(Theme.accent)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .heavy))
-                    .foregroundColor(Theme.accent)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-            }
-            .contentShape(Rectangle())
+private struct FilterCriteria: Sendable {
+    let selectedTracks: Set<String>
+    let selectedVehicles: Set<String>
+    let startDate: Date?
+    let endDate: Date?
+
+    func matches(_ snap: SessionSnapshot) -> Bool {
+        if !selectedTracks.isEmpty, !selectedTracks.contains(snap.trackName) { return false }
+        if !selectedVehicles.isEmpty, !selectedVehicles.contains(snap.vehicleName) { return false }
+        if let start = startDate, snap.date < start { return false }
+        if let end = endDate {
+            let extended = Calendar.current.date(byAdding: .day, value: 1, to: end) ?? end
+            if snap.date > extended { return false }
         }
-        .buttonStyle(.plain)
+        return true
     }
+}
+
+private struct FieldRange: Sendable {
+    let min: Double
+    let max: Double
+}
+
+// Computed once per Analyze tap. Captures every input the panels need so
+// slider drags only have to recompute averages on a fixed dataset, not
+// re-filter or re-sort.
+private struct AnalysisCache: Sendable {
+    let outcome: String
+    let outcomeFieldType: FieldType
+    let fieldNames: [String]
+    let fieldTypes: [String: FieldType]
+    let sortedSnapshots: [SessionSnapshot]
+    let fieldRanges: [String: FieldRange]
+
+    static func compute(
+        snapshots: [SessionSnapshot],
+        filter: FilterCriteria,
+        outcome: String,
+        outcomeFieldType: FieldType,
+        fieldNames: [String],
+        fieldTypes: [String: FieldType]
+    ) -> AnalysisCache {
+        let filtered = snapshots.filter { snap in
+            filter.matches(snap) && snap.numericValues[outcome] != nil
+        }
+        let sorted = filtered.sorted {
+            ($0.numericValues[outcome] ?? 0) < ($1.numericValues[outcome] ?? 0)
+        }
+        var ranges: [String: FieldRange] = [:]
+        for name in fieldNames {
+            let values = sorted.compactMap { $0.numericValues[name] }
+            guard let mn = values.min(), let mx = values.max() else { continue }
+            ranges[name] = FieldRange(min: mn, max: mx)
+        }
+        return AnalysisCache(
+            outcome: outcome,
+            outcomeFieldType: outcomeFieldType,
+            fieldNames: fieldNames,
+            fieldTypes: fieldTypes,
+            sortedSnapshots: sorted,
+            fieldRanges: ranges
+        )
+    }
+}
+
+// Recomputed on each debounced slider settle. Cheap relative to
+// AnalysisCache because the heavy filter / sort / range work is already
+// baked into the analysis input.
+private struct PanelCache: Sendable {
+    let totalSessions: Int
+    let splitIndex: Int
+    let leftOutcomeAvg: Double?
+    let rightOutcomeAvg: Double?
+    let fieldOrder: [String]
+    let leftAverages: [String: Double]
+    let rightAverages: [String: Double]
+
+    static func compute(from analysis: AnalysisCache, sliderPosition: Double) -> PanelCache {
+        let total = analysis.sortedSnapshots.count
+        let split = min(max(0, Int(round(sliderPosition * Double(total)))), total)
+        let leftSlice = Array(analysis.sortedSnapshots.prefix(split))
+        let rightSlice = Array(analysis.sortedSnapshots.suffix(total - split))
+
+        func avg(_ slice: [SessionSnapshot], for name: String) -> Double? {
+            let vals = slice.compactMap { $0.numericValues[name] }
+            guard !vals.isEmpty else { return nil }
+            return vals.reduce(0, +) / Double(vals.count)
+        }
+
+        let leftOutcome = avg(leftSlice, for: analysis.outcome)
+        let rightOutcome = avg(rightSlice, for: analysis.outcome)
+
+        var leftAverages: [String: Double] = [:]
+        var rightAverages: [String: Double] = [:]
+        for name in analysis.fieldNames {
+            if let l = avg(leftSlice, for: name) { leftAverages[name] = l }
+            if let r = avg(rightSlice, for: name) { rightAverages[name] = r }
+        }
+
+        // Normalize each metric's between-panel delta by its own observed
+        // range so PSI / seconds / degrees compete fairly for the
+        // descending sort order.
+        var diffs: [(name: String, diff: Double)] = []
+        for name in analysis.fieldNames {
+            guard let l = leftAverages[name], let r = rightAverages[name] else { continue }
+            let raw = abs(r - l)
+            let normalized: Double
+            if let range = analysis.fieldRanges[name], range.max > range.min {
+                normalized = raw / (range.max - range.min)
+            } else {
+                normalized = raw
+            }
+            diffs.append((name: name, diff: normalized))
+        }
+        diffs.sort { $0.diff > $1.diff }
+
+        let withDiffSet = Set(diffs.map { $0.name })
+        var order = diffs.map { $0.name }
+        for name in analysis.fieldNames where !withDiffSet.contains(name) {
+            order.append(name)
+        }
+
+        return PanelCache(
+            totalSessions: total,
+            splitIndex: split,
+            leftOutcomeAvg: leftOutcome,
+            rightOutcomeAvg: rightOutcome,
+            fieldOrder: order,
+            leftAverages: leftAverages,
+            rightAverages: rightAverages
+        )
+    }
+}
+
+// MARK: - Data sufficiency detail sheet
+
+// Mirrors the modal style used by CorrelationPairDetailView in the
+// Correlation Matrix — NavigationStack + Theme.background + xmark close
+// button + a single result card. Reuses `DataSufficiencyLevel.description`
+// so the body text already explains the level and how many sessions are
+// needed to reach the next tier.
+private struct RaceEngineerDataSufficiencyDetail: View {
+    @Environment(\.dismiss) private var dismiss
+    let level: DataSufficiencyLevel
+    let sampleSize: Int
+    let outcome: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            headlineSection
-            Divider().background(Theme.hairline)
-            modelSummarySection
-            Divider().background(Theme.hairline)
-            contributorsSection
-            Divider().background(Theme.hairline)
-            recommendationsSection
-            Divider().background(Theme.hairline)
-            dataSufficiencySection
+        NavigationStack {
+            ZStack {
+                Theme.background.ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: 20) {
+                        outcomeHeader
+                        detailCard
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle("Data Sufficiency")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var outcomeHeader: some View {
+        HStack {
+            Text(outcome.uppercased())
+                .font(.system(size: 13, weight: .heavy))
+                .tracking(1)
+                .foregroundColor(Theme.accent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.accent.opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    private var detailCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label("DATA SUFFICIENCY", systemImage: "square.stack.3d.up.fill")
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
+                .foregroundColor(Theme.accent)
+
+            DataSufficiencyBadge(level: level)
+
+            Text(level.description(sampleSize: sampleSize))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 6) {
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Theme.textTertiary)
+                Text("\(sampleSize) session\(sampleSize == 1 ? "" : "s") analyzed")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundColor(Theme.textTertiary)
+            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -454,496 +980,15 @@ private struct RaceEngineerResultCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
-        )
-        .shadow(color: Theme.accent.opacity(0.15), radius: 16)
-    }
-
-    // MARK: - Headline
-
-    private var headlineSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("MODEL PREDICTIVE POWER")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
-            HStack(alignment: .lastTextBaseline, spacing: 6) {
-                Text("\(adjustedRSquaredPercent)")
-                    .font(.system(size: 56, weight: .heavy, design: .rounded))
-                    .foregroundColor(Theme.accent)
-                Text("%")
-                    .font(.system(size: 28, weight: .heavy, design: .rounded))
-                    .foregroundColor(Theme.accent)
-            }
-            Text("Race Engineer v2 has identified \(result.predictors.count) metric\(result.predictors.count == 1 ? "" : "s") that together appear to influence approximately \(adjustedRSquaredPercent)% of your \(result.outcome). The remaining \(100 - adjustedRSquaredPercent)% of variation lies outside your current tracked data.")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    // MARK: - Section 1 — Model Summary
-
-    private var modelSummarySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(
-                title: "MODEL SUMMARY",
-                systemImage: "sparkles",
-                isExpanded: isModelSummaryExpanded
-            ) {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isModelSummaryExpanded.toggle()
-                }
-            }
-
-            if isModelSummaryExpanded {
-                Text(modelSummaryText)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Theme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var modelSummaryText: String {
-        let n = result.predictors.count
-        let names = result.contributors.map(\.name).joined(separator: ", ")
-        let pct = adjustedRSquaredPercent
-        var text = "The following \(n) metric\(n == 1 ? "" : "s") when combined currently have the highest predictive power for \(result.outcome): \(names). In other words, of all the metrics you have logged so far, "
-        if n == 1 {
-            text += "this metric "
-        } else {
-            text += "these \(n) metrics acting together "
-        }
-        text += "appear to have the greatest "
-        if n == 1 { text += "influence on \(result.outcome)" }
-        else { text += "combined influence on \(result.outcome)" }
-        text += ". Together they account for \(pct)% of the observed variation in \(result.outcome) across \(result.sampleSize) session\(result.sampleSize == 1 ? "" : "s")\(contextSuffix)."
-        if result.adjustedRSquared < 0.20 {
-            text += " While this may seem low, even a small improvement in \(result.outcome) can provide a meaningful edge — and as more sessions are logged this figure may increase."
-        }
-        return text
-    }
-
-    private var contextSuffix: String {
-        var suffix = ""
-        if result.tracks.count == 1, let track = result.tracks.first, !track.isEmpty {
-            suffix += " at \(track)"
-        }
-        if result.vehicles.count == 1, let vehicle = result.vehicles.first, !vehicle.isEmpty {
-            suffix += " in \(vehicle)"
-        }
-        return suffix
-    }
-
-    // MARK: - Section 2 — Contributors
-
-    private var contributorsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            sectionHeader(
-                title: "METRIC CONTRIBUTORS (\(result.contributors.count))",
-                systemImage: "chart.bar.fill",
-                isExpanded: isContributorsExpanded
-            ) {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isContributorsExpanded.toggle()
-                }
-            }
-
-            if isContributorsExpanded {
-                Text("The following \(result.contributors.count) metric\(result.contributors.count == 1 ? "" : "s") \(result.contributors.count == 1 ? "was" : "were") isolated amongst a grouping of up to 15 combined metrics and returned the highest predictive power for \(result.outcome):")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Theme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                ForEach(Array(result.contributors.enumerated()), id: \.element.id) { index, contributor in
-                    contributorRow(contributor: contributor, isTop: index == 0)
-                }
-
-                Text("Each metric's contribution is its share of the model's explanatory power. Absolute contribution (share × Adjusted R²) is the portion of overall \(result.outcome) variation attributable to that metric, assuming the others in the model are held fixed.")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(Theme.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private func contributorRow(contributor: RaceEngineerContributor, isTop: Bool) -> some View {
-        let share = max(0, min(1, contributor.sharePercent / 100))
-        // absolutePct is the share of outcome variation attributable to this
-        // predictor alone: (share of model) × (Adjusted R² of model), expressed
-        // as a 0–100 percentage for display.
-        let absolutePct = contributor.sharePercent * result.adjustedRSquared
-        let absoluteCopy: String
-        if isTop {
-            absoluteCopy = "\(contributor.name) is the largest contributor at \(formatShare(contributor.sharePercent)) of the model, meaning it accounts for approximately \(formatShare(absolutePct)) of \(result.outcome) variation — your largest single lever on performance in this dataset."
-        } else {
-            absoluteCopy = "Accounts for approximately \(formatShare(absolutePct)) of \(result.outcome) variation — \(rankDescription(for: contributor))."
-        }
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(contributor.name.uppercased())
-                    .font(.system(size: 13, weight: .heavy))
-                    .tracking(1)
-                    .foregroundColor(Theme.textPrimary)
-                    .lineLimit(1)
-                Spacer()
-                Text(String(format: "%.0f%%", contributor.sharePercent))
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
-                    .foregroundColor(Theme.accent)
-            }
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Theme.surfaceElevated)
-                        .frame(height: 6)
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Theme.accent)
-                        .frame(width: max(geo.size.width * CGFloat(share), 2), height: 6)
-                        .shadow(color: Theme.accent.opacity(0.5), radius: 4)
-                }
-            }
-            .frame(height: 6)
-
-            directionRow(contributor: contributor)
-
-            if let perUnit = perUnitInsight(for: contributor) {
-                insightBullet(text: perUnit)
-            }
-
-            insightBullet(text: absoluteCopy)
-
-            insightBullet(text: "Observed range in your sessions: \(formatValue(contributor.observedMin, contributor: contributor)) to \(formatValue(contributor.observedMax, contributor: contributor))\(unitSuffix(contributor.unit))")
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceElevated)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(isTop ? Theme.accent.opacity(0.35) : Theme.hairline, lineWidth: 1)
-        )
-    }
-
-    private func directionRow(contributor: RaceEngineerContributor) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: directionIcon(for: contributor))
-                .font(.system(size: 11, weight: .heavy))
-                .foregroundColor(Theme.accent)
-            Text(directionText(for: contributor))
-                .font(.system(size: 12, weight: .heavy))
-                .foregroundColor(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func directionText(for contributor: RaceEngineerContributor) -> String {
-        guard contributor.hasClearDirection else {
-            return "Direction uncertain in this dataset — mixed effect on \(result.outcome)."
-        }
-        let outcomeBetter: String
-        switch result.outcomeFieldType {
-        case .time: outcomeBetter = "lower \(result.outcome)"
-        case .number: outcomeBetter = "higher \(result.outcome)"
-        case .text: outcomeBetter = "better \(result.outcome)"
-        }
-        // Standardized coefficient sign tells us whether predictor pushes
-        // outcome up or down. Combine with outcome's "better direction" to
-        // phrase whether higher predictor values are good or bad.
-        let pushesOutcomeDown = contributor.standardizedCoefficient < 0
-        let higherIsBetter: Bool
-        switch result.outcomeFieldType {
-        case .time: higherIsBetter = pushesOutcomeDown
-        case .number: higherIsBetter = !pushesOutcomeDown
-        case .text: higherIsBetter = !pushesOutcomeDown
-        }
-        let directionWord = higherIsBetter ? "Higher" : "Lower"
-        return "\(directionWord) values associated with \(outcomeBetter)."
-    }
-
-    private func directionIcon(for contributor: RaceEngineerContributor) -> String {
-        guard contributor.hasClearDirection else { return "arrow.left.arrow.right" }
-        let pushesOutcomeDown = contributor.standardizedCoefficient < 0
-        let higherIsBetter: Bool
-        switch result.outcomeFieldType {
-        case .time: higherIsBetter = pushesOutcomeDown
-        case .number: higherIsBetter = !pushesOutcomeDown
-        case .text: higherIsBetter = !pushesOutcomeDown
-        }
-        return higherIsBetter ? "arrow.up.right" : "arrow.down.right"
-    }
-
-    private func insightBullet(text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Circle()
-                .fill(Theme.accent.opacity(0.7))
-                .frame(width: 4, height: 4)
-                .padding(.top, 6)
-            Text(text)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func rankDescription(for contributor: RaceEngineerContributor) -> String {
-        let idx = result.contributors.firstIndex(where: { $0.id == contributor.id }) ?? 0
-        switch idx {
-        case 1: return "your 2nd largest lever on \(result.outcome)"
-        case 2: return "your 3rd largest lever on \(result.outcome)"
-        default: return "a secondary lever on \(result.outcome)"
-        }
-    }
-
-    private func perUnitInsight(for contributor: RaceEngineerContributor) -> String? {
-        guard contributor.hasClearDirection else { return nil }
-        let magnitude = abs(contributor.rawCoefficient)
-        guard magnitude > 1e-9 else { return nil }
-        let direction = contributor.rawCoefficient > 0 ? "increases" : "decreases"
-        let predictorUnit = contributor.unit.isEmpty ? "unit" : contributor.unit
-        let outcomeChange = formatOutcomeDelta(magnitude)
-        return "For every 1 \(predictorUnit) increase in \(contributor.name), \(result.outcome) \(direction) by approximately \(outcomeChange)."
-    }
-
-    // MARK: - Section 3 — Setup Recommendations
-
-    private var recommendationsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(
-                title: "SETUP RECOMMENDATIONS",
-                systemImage: "wrench.and.screwdriver.fill",
-                isExpanded: isRecommendationsExpanded
-            ) {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isRecommendationsExpanded.toggle()
-                }
-            }
-
-            if isRecommendationsExpanded {
-                Text("For best results adjust one metric at a time across sessions so you can isolate the effect of each change. Start with your highest contributing metric first.")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Theme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Continue logging sessions as normal to improve the model and refine these recommendations over time.")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Theme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                ForEach(result.contributors) { contributor in
-                    recommendationRow(contributor: contributor)
-                }
-
-                Text("These are hypotheses to test on track, not guaranteed outcomes. Deliberately vary these values across sessions and use the Correlation and Trend tools to track the effect.")
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(0.3)
-                    .foregroundColor(Theme.accent.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Theme.accent.opacity(0.08))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
-                    )
-            }
-        }
-    }
-
-    private func recommendationRow(contributor: RaceEngineerContributor) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(contributor.name.uppercased())
-                .font(.system(size: 12, weight: .heavy))
-                .tracking(1)
-                .foregroundColor(Theme.textPrimary)
-
-            Text(recommendationText(for: contributor))
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceElevated)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Theme.hairline, lineWidth: 1)
         )
     }
-
-    private func recommendationText(for contributor: RaceEngineerContributor) -> String {
-        let trackPhrase = result.tracks.count == 1 ? " at \(result.tracks[0])" : ""
-        let unit = unitSuffix(contributor.unit)
-
-        // Case 3 — Insufficient variation in the predictor itself.
-        if !contributor.hasMeaningfulVariation {
-            return "Not enough variation in \(contributor.name) across your sessions to make a specific recommendation. Try deliberately varying this value across your next few sessions."
-        }
-
-        // Case 2 — Direction is present but top-session range doesn't discriminate
-        // enough from the overall range to be actionable.
-        if !contributor.hasClearDirection || !contributor.topSessionsDiscriminate {
-            let higherIsBetter = impliedHigherIsBetter(for: contributor)
-            let directionWord = higherIsBetter ? "Higher" : "Lower"
-            let actionVerb = higherIsBetter ? "raising" : "lowering"
-            return "\(directionWord) \(contributor.name) is associated with better \(result.outcome) in your data. Try \(actionVerb) from your current session average of \(formatValue(contributor.observedMean, contributor: contributor))\(unit) and observe the effect."
-        }
-
-        // Case 1 — Clear direction + informative top-session range.
-        let rangeLow = formatValue(contributor.topSessionMin, contributor: contributor)
-        let rangeHigh = formatValue(contributor.topSessionMax, contributor: contributor)
-        let actionVerb = impliedHigherIsBetter(for: contributor) ? "raising" : "lowering"
-        let avg = formatValue(contributor.observedMean, contributor: contributor)
-        return "Target \(contributor.name) between \(rangeLow) and \(rangeHigh)\(unit) — this is the range seen in your \(contributor.topSessionCount) fastest session\(contributor.topSessionCount == 1 ? "" : "s")\(trackPhrase). Try \(actionVerb) from your current session average of \(avg)\(unit)."
-    }
-
-    private func impliedHigherIsBetter(for contributor: RaceEngineerContributor) -> Bool {
-        guard contributor.hasClearDirection else { return true }
-        let pushesOutcomeDown = contributor.standardizedCoefficient < 0
-        switch result.outcomeFieldType {
-        case .time: return pushesOutcomeDown
-        case .number: return !pushesOutcomeDown
-        case .text: return !pushesOutcomeDown
-        }
-    }
-
-    // MARK: - Section 4 — Data Sufficiency
-
-    private var dataSufficiencySection: some View {
-        let k = max(result.predictors.count, 1)
-        let currentSessions = result.sampleSize
-        let goodTarget = RegressionEngine.highSessionsPerPredictor * k
-        let excellentTarget = RegressionEngine.idealSessionsPerPredictor * k
-        let needed = max(0, goodTarget - currentSessions)
-
-        return VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(
-                title: "DATA SUFFICIENCY",
-                systemImage: "square.stack.3d.up.fill",
-                isExpanded: isDataSufficiencyExpanded
-            ) {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isDataSufficiencyExpanded.toggle()
-                }
-            }
-
-            if isDataSufficiencyExpanded {
-                DataSufficiencyBadge(level: result.dataSufficiency)
-
-                Text(result.dataSufficiency.description(
-                    sampleSize: result.sampleSize,
-                    predictorCount: result.predictors.count
-                ))
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-                VStack(spacing: 0) {
-                    sufficiencyRow(label: "Sessions analyzed", value: "\(currentSessions)")
-                    Divider().background(Theme.hairline).padding(.leading, 14)
-                    sufficiencyRow(label: "Predictors in model", value: "\(result.predictors.count)")
-                    Divider().background(Theme.hairline).padding(.leading, 14)
-                    sufficiencyRow(label: "Recommended for Good", value: "\(goodTarget)")
-                    Divider().background(Theme.hairline).padding(.leading, 14)
-                    sufficiencyRow(label: "Recommended for Excellent", value: "\(excellentTarget)")
-                    if needed > 0 {
-                        Divider().background(Theme.hairline).padding(.leading, 14)
-                        sufficiencyRow(
-                            label: "Still needed for Good",
-                            value: "+\(needed) session\(needed == 1 ? "" : "s")",
-                            emphasize: true
-                        )
-                    }
-                }
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceElevated)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Theme.hairline, lineWidth: 1)
-                )
-
-                Text("As more sessions are logged\(contextSuffix) the model may identify different optimal predictors and update these recommendations — particularly at Bad or Poor data sufficiency levels where results are most likely to change.")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private func sufficiencyRow(label: String, value: String, emphasize: Bool = false) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Theme.textSecondary)
-            Spacer()
-            Text(value)
-                .font(.system(size: 13, weight: .heavy))
-                .foregroundColor(emphasize ? Theme.warning : Theme.textPrimary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Formatting
-
-    private func formatValue(_ value: Double, contributor: RaceEngineerContributor) -> String {
-        switch contributor.fieldType {
-        case .time:
-            return TimeFormatting.secondsToDisplay(value)
-        case .number:
-            return formatNumber(value)
-        case .text:
-            return formatNumber(value)
-        }
-    }
-
-    private func formatNumber(_ value: Double) -> String {
-        let magnitude = abs(value)
-        if magnitude >= 100 {
-            return String(format: "%.1f", value)
-        } else if magnitude >= 10 {
-            return String(format: "%.2f", value)
-        } else {
-            return String(format: "%.3f", value)
-        }
-    }
-
-    private func formatOutcomeDelta(_ magnitude: Double) -> String {
-        let outcomeUnit = result.outcomeUnit.isEmpty ? "" : " \(result.outcomeUnit)"
-        switch result.outcomeFieldType {
-        case .time:
-            if magnitude < 1 {
-                let millis = magnitude * 1000
-                return String(format: "%.0f ms", millis)
-            }
-            return "\(formatNumber(magnitude))\(outcomeUnit.isEmpty ? " s" : outcomeUnit)"
-        case .number, .text:
-            return "\(formatNumber(magnitude))\(outcomeUnit)"
-        }
-    }
-
-    private func unitSuffix(_ unit: String) -> String {
-        unit.isEmpty ? "" : " \(unit)"
-    }
-
-    private func formatShare(_ percent: Double) -> String {
-        String(format: "%.0f%%", percent)
-    }
 }
 
-// MARK: - Field picker sheet
+// MARK: - Outcome picker sheet
 
-private struct RaceEngineerFieldPicker: View {
+private struct RaceEngineerOutcomePicker: View {
     @Environment(\.dismiss) private var dismiss
-    let title: String
     let fields: [CustomField]
     let selected: String?
     let onSelect: (String) -> Void
@@ -954,7 +999,7 @@ private struct RaceEngineerFieldPicker: View {
                 Theme.background.ignoresSafeArea()
                 content
             }
-            .navigationTitle(title)
+            .navigationTitle("Select Metric")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

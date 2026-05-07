@@ -14,5 +14,6 @@ enum AppConfig {
     static let isCorrelationMatrixEnabled = false
     static let isPersonalBestsEnabled = false
     static let isPerformancePredictorEnabled = false
-    static let isRaceEngineerEnabled = false
+    static let isRaceEngineerEnabled = true
+    static let isRaceEngineerV2Enabled = false
 }

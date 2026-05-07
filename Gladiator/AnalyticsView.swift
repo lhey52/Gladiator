@@ -125,11 +125,21 @@ struct AnalyticsView: View {
 
                         if AppConfig.isRaceEngineerEnabled {
                             AnalyticsCard(
+                                icon: "rectangle.split.2x1.fill",
+                                title: "Race Engineer",
+                                description: "Compare your setup across sessions to identify what changes between your best and worst results"
+                            ) {
+                                RaceEngineerView()
+                            }
+                        }
+
+                        if AppConfig.isRaceEngineerV2Enabled {
+                            AnalyticsCard(
                                 icon: "wand.and.stars",
                                 title: "Race Engineer v2",
                                 description: "Automatically identify your most influential setup metrics and get actionable targets"
                             ) {
-                                RaceEngineerView()
+                                RaceEngineerV2View()
                             }
                         }
                     }
