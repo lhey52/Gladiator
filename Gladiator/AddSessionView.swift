@@ -17,7 +17,7 @@ private struct AddSessionFieldFramesKey: PreferenceKey {
 
 private enum SessionFormField: Hashable {
     case notes
-    case pitText(String)
+    case metricText(String)
 }
 
 struct AddSessionView: View {
@@ -41,10 +41,11 @@ struct AddSessionView: View {
     @State private var sessionType: SessionType = .practice
     @State private var notes: String = ""
     @State private var fieldEntries: [String: String] = [:]
-    @State private var activeZone: CarZone?
+    @State private var expandedZone: CarZone?
     @State private var activeNumberField: String?
     @State private var fieldFrames: [String: CGRect] = [:]
     @State private var showingPaywall: Bool = false
+    @Namespace private var zoneNamespace
     @State private var showingResetConfirm: Bool = false
     @State private var toastIcon: String = ""
     @State private var toastText: String = ""
@@ -58,14 +59,24 @@ struct AddSessionView: View {
     }
 
     private var allFields: [SessionFormField] {
-        // Pit-box text fields are now inline on the form root, so they
-        // join Notes in the keyboard chevron walk. Number/Time fields use
-        // the bubble pad / wheel and don't take focus.
+        // While a zone is expanded, the chevrons walk only that zone's
+        // text fields so focus doesn't jump out of the focused card. In
+        // the resting state, pit-box text fields walk into Notes.
+        if let zone = expandedZone {
+            return customFields
+                .filter { $0.zone == zone && $0.fieldType == .text }
+                .map { .metricText($0.name) }
+        }
         var fields: [SessionFormField] = generalFields
             .filter { $0.fieldType == .text }
-            .map { .pitText($0.name) }
+            .map { .metricText($0.name) }
         fields.append(.notes)
         return fields
+    }
+
+    private var expandedZoneFields: [CustomField] {
+        guard let zone = expandedZone else { return [] }
+        return customFields.filter { $0.zone == zone }
     }
 
     private var generalFields: [CustomField] {
@@ -106,6 +117,20 @@ struct AddSessionView: View {
                     .allowsHitTesting(false)
                 }
 
+                if expandedZone != nil {
+                    Color.black.opacity(0.65)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                        .onTapGesture { collapseExpandedZone() }
+                }
+
+                if let zone = expandedZone {
+                    expandedZoneCard(zone: zone)
+                        .matchedGeometryEffect(id: zone, in: zoneNamespace, isSource: true)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 60)
+                }
+
                 if let activeName = activeNumberField,
                    let field = generalFields.first(where: { $0.name == activeName }),
                    let frame = fieldFrames[activeName] {
@@ -139,16 +164,6 @@ struct AddSessionView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .sheet(item: $activeZone) { zone in
-            ZoneMetricsSheet(
-                zone: zone,
-                fields: customFields.filter { $0.zone == zone },
-                entries: $fieldEntries,
-                onClose: { activeZone = nil }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
         .onAppear {
             if !didLoadDefault {
                 didLoadDefault = true
@@ -172,6 +187,7 @@ struct AddSessionView: View {
     private func resetForm() {
         focusedField = nil
         activeNumberField = nil
+        expandedZone = nil
         date = .now
         trackName = ""
         vehicleName = ""
@@ -181,6 +197,14 @@ struct AddSessionView: View {
         isPitBoxExpanded = false
         isNotesExpanded = false
         loadDefaults()
+    }
+
+    private func collapseExpandedZone() {
+        focusedField = nil
+        activeNumberField = nil
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+            expandedZone = nil
+        }
     }
 
     private func showToastBriefly(icon: String, text: String) {
@@ -309,9 +333,14 @@ struct AddSessionView: View {
             cardHeader("ZONES")
             RaceCarDiagramView(
                 zoneStates: zoneStates,
+                expandedZone: expandedZone,
+                matchedNamespace: zoneNamespace,
                 onTapZone: { zone in
                     focusedField = nil
-                    activeZone = zone
+                    activeNumberField = nil
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                        expandedZone = zone
+                    }
                 }
             )
             .padding(.horizontal, 12)
@@ -539,7 +568,7 @@ struct AddSessionView: View {
             .keyboardType(.default)
             .multilineTextAlignment(.trailing)
             .autocorrectionDisabled()
-            .focused($focusedField, equals: .pitText(field.name))
+            .focused($focusedField, equals: .metricText(field.name))
         case .number:
             pitNumberFieldButton(field: field)
         }
@@ -622,6 +651,89 @@ struct AddSessionView: View {
             get: { fieldEntries[field.name, default: ""] },
             set: { fieldEntries[field.name] = $0 }
         )
+    }
+
+    // MARK: - Expanded zone card
+
+    private func expandedZoneCard(zone: CarZone) -> some View {
+        VStack(spacing: 0) {
+            expandedZoneHeader(zone: zone)
+            if expandedZoneFields.isEmpty {
+                expandedZoneEmptyState(zone: zone)
+            } else {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(expandedZoneFields) { field in
+                            pitMetricRow(field: field)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+                }
+                .scrollDisabled(activeNumberField != nil)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Theme.accent.opacity(0.55), lineWidth: 1.5)
+        )
+        .shadow(color: Theme.accent.opacity(0.35), radius: 28)
+    }
+
+    private func expandedZoneHeader(zone: CarZone) -> some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("ZONE")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+                Text(zone.displayName.uppercased())
+                    .font(.system(size: 22, weight: .heavy))
+                    .tracking(1.2)
+                    .foregroundColor(Theme.accent)
+            }
+            Spacer()
+            Button(action: collapseExpandedZone) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .heavy))
+                    .foregroundColor(Theme.accent)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle().fill(Theme.surfaceElevated)
+                    )
+                    .overlay(
+                        Circle().stroke(Theme.accent.opacity(0.45), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close zone")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 12)
+    }
+
+    private func expandedZoneEmptyState(zone: CarZone) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: "tray")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(Theme.textTertiary)
+            Text("NO METRICS IN THIS ZONE")
+                .font(.system(size: 12, weight: .heavy))
+                .tracking(1.6)
+                .foregroundColor(Theme.textSecondary)
+            Text("Assign metrics to \(zone.displayName) in Settings → Session Customization → Metrics")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Theme.textTertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
     }
 
     private func save() {

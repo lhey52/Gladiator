@@ -16,6 +16,8 @@ struct ZoneFillState: Equatable {
 
 struct RaceCarDiagramView: View {
     let zoneStates: [CarZone: ZoneFillState]
+    var expandedZone: CarZone? = nil
+    var matchedNamespace: Namespace.ID? = nil
     let onTapZone: (CarZone) -> Void
 
     var body: some View {
@@ -37,24 +39,36 @@ struct RaceCarDiagramView: View {
 
                 ForEach(CarZone.carZones) { zone in
                     let layout = RaceCarDiagramView.layout(for: zone)
-                    ZoneCell(
-                        zone: zone,
-                        state: zoneStates[zone] ?? ZoneFillState(filled: 0, total: 0),
-                        action: { onTapZone(zone) }
-                    )
-                    .frame(
-                        width: size.width * layout.size.width,
-                        height: size.height * layout.size.height
-                    )
-                    .position(
-                        x: size.width * layout.center.x,
-                        y: size.height * layout.center.y
-                    )
+                    zoneCellView(for: zone)
+                        .frame(
+                            width: size.width * layout.size.width,
+                            height: size.height * layout.size.height
+                        )
+                        .position(
+                            x: size.width * layout.center.x,
+                            y: size.height * layout.center.y
+                        )
                 }
             }
         }
         .aspectRatio(0.55, contentMode: .fit)
         .padding(.horizontal, 8)
+    }
+
+    @ViewBuilder
+    private func zoneCellView(for zone: CarZone) -> some View {
+        let cell = ZoneCell(
+            zone: zone,
+            state: zoneStates[zone] ?? ZoneFillState(filled: 0, total: 0),
+            action: { onTapZone(zone) }
+        )
+        if let ns = matchedNamespace {
+            cell
+                .matchedGeometryEffect(id: zone, in: ns, isSource: expandedZone != zone)
+                .opacity(expandedZone == zone ? 0 : 1)
+        } else {
+            cell
+        }
     }
 
     private func centerlineDivider(size: CGSize) -> some View {
