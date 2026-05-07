@@ -27,13 +27,13 @@ struct RaceCarDiagramView: View {
                 CarChassisShape()
                     .fill(
                         LinearGradient(
-                            colors: [Theme.surface, Theme.surfaceElevated],
+                            colors: [Theme.chassisFillTop, Theme.chassisFillBottom],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
                 CarChassisShape()
-                    .stroke(Theme.hairline, lineWidth: 1)
+                    .stroke(Theme.chassisLine, lineWidth: 1)
 
                 centerlineDivider(size: size)
 
@@ -73,7 +73,7 @@ struct RaceCarDiagramView: View {
 
     private func centerlineDivider(size: CGSize) -> some View {
         Rectangle()
-            .fill(Theme.hairline)
+            .fill(Theme.chassisLine)
             .frame(width: size.width * 0.005, height: size.height * 0.50)
             .position(x: size.width * 0.5, y: size.height * 0.50)
     }
@@ -214,7 +214,7 @@ private struct ZoneCell: View {
                 VStack(spacing: h * 0.18) {
                     ForEach(0..<3, id: \.self) { _ in
                         Rectangle()
-                            .fill(Theme.hairline)
+                            .fill(Theme.chassisLine)
                             .frame(height: 1)
                     }
                 }

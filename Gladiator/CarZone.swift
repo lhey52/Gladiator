@@ -24,14 +24,14 @@ enum CarZone: String, CaseIterable, Codable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .flTire: return "Front Left Tire"
-        case .frTire: return "Front Right Tire"
-        case .blTire: return "Rear Left Tire"
-        case .brTire: return "Rear Right Tire"
-        case .engine: return "Engine"
+        case .flTire: return "Front Left"
+        case .frTire: return "Front Right"
+        case .blTire: return "Back Left"
+        case .brTire: return "Back Right"
+        case .engine: return "Engine and Drivetrain"
         case .cockpit: return "Cockpit"
-        case .front: return "Front Wing"
-        case .rear: return "Rear Wing"
+        case .front: return "Front"
+        case .rear: return "Back"
         case .general: return "General"
         }
     }

@@ -132,7 +132,7 @@ struct AddSessionView: View {
                 }
 
                 if let activeName = activeNumberField,
-                   let field = generalFields.first(where: { $0.name == activeName }),
+                   let field = customFields.first(where: { $0.name == activeName }),
                    let frame = fieldFrames[activeName] {
                     NumberPadBubbleOverlay(
                         anchorFrame: frame,
@@ -204,6 +204,31 @@ struct AddSessionView: View {
         activeNumberField = nil
         withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
             expandedZone = nil
+        }
+    }
+
+    // Walk-around-the-car order for prev/next navigation. Wraps in both
+    // directions so users can keep stepping forward without thinking
+    // about edges.
+    private static let zoneNavigationOrder: [CarZone] = [
+        .front, .flTire, .frTire, .cockpit, .engine, .blTire, .brTire, .rear
+    ]
+
+    private func zoneNeighbor(of zone: CarZone, offset: Int) -> CarZone {
+        let order = Self.zoneNavigationOrder
+        guard let idx = order.firstIndex(of: zone), !order.isEmpty else { return zone }
+        let count = order.count
+        let target = ((idx + offset) % count + count) % count
+        return order[target]
+    }
+
+    private func navigateZone(by offset: Int) {
+        guard let current = expandedZone else { return }
+        let target = zoneNeighbor(of: current, offset: offset)
+        focusedField = nil
+        activeNumberField = nil
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+            expandedZone = target
         }
     }
 
@@ -668,10 +693,11 @@ struct AddSessionView: View {
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 8)
                 }
                 .scrollDisabled(activeNumberField != nil)
             }
+            expandedZoneFooter
         }
         .frame(maxWidth: .infinity)
         .background(
@@ -682,6 +708,53 @@ struct AddSessionView: View {
                 .stroke(Theme.accent.opacity(0.55), lineWidth: 1.5)
         )
         .shadow(color: Theme.accent.opacity(0.35), radius: 28)
+    }
+
+    private var expandedZoneFooter: some View {
+        HStack(spacing: 12) {
+            zoneNavButton(label: "PREVIOUS", systemImage: "chevron.left", isLeading: true) {
+                navigateZone(by: -1)
+            }
+            zoneNavButton(label: "NEXT", systemImage: "chevron.right", isLeading: false) {
+                navigateZone(by: 1)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 18)
+    }
+
+    private func zoneNavButton(
+        label: String,
+        systemImage: String,
+        isLeading: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if isLeading {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 11, weight: .heavy))
+                }
+                Text(label)
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                if !isLeading {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 11, weight: .heavy))
+                }
+            }
+            .foregroundColor(Theme.accent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                Capsule().fill(Theme.surfaceElevated)
+            )
+            .overlay(
+                Capsule().stroke(Theme.accent.opacity(0.5), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func expandedZoneHeader(zone: CarZone) -> some View {
