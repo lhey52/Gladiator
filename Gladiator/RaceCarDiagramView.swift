@@ -24,7 +24,11 @@ struct RaceCarDiagramView: View {
         GeometryReader { geo in
             let size = geo.size
             ZStack {
-                CarChassisShape()
+                // Unified blueprint: chassis silhouette + tires + axle stubs +
+                // bumpers, all rendered as one fill + one stroke pass so the
+                // whole thing reads as a single drawing instead of stitched
+                // tiles. Bumpers stay positionally separated by intent.
+                CarChassisFillShape()
                     .fill(
                         LinearGradient(
                             colors: [Theme.chassisFillTop, Theme.chassisFillBottom],
@@ -32,18 +36,8 @@ struct RaceCarDiagramView: View {
                             endPoint: .bottom
                         )
                     )
-                CarChassisShape()
+                CarChassisStrokeShape()
                     .stroke(Theme.chassisLine, lineWidth: 1)
-
-                centerlineDivider(size: size)
-
-                // Axle stubs that read as the body outline continuing out
-                // to each tire — only filling the gap between the chassis
-                // curve and the tire's inner edge, so nothing crosses the
-                // body interior. Same chassisLine color as the chassis
-                // stroke for visual continuity.
-                axleStubs(yRatio: 0.22, chassisRightX: 0.695, chassisLeftX: 0.305, in: size)
-                axleStubs(yRatio: 0.78, chassisRightX: 0.719, chassisLeftX: 0.281, in: size)
 
                 ForEach(CarZone.carZones) { zone in
                     let layout = RaceCarDiagramView.layout(for: zone)
@@ -79,63 +73,6 @@ struct RaceCarDiagramView: View {
         }
     }
 
-    private func centerlineDivider(size: CGSize) -> some View {
-        Rectangle()
-            .fill(Theme.chassisLine)
-            .frame(width: 1, height: size.height * 0.50)
-            .position(x: size.width * 0.5, y: size.height * 0.50)
-    }
-
-    @ViewBuilder
-    private func axleStubs(
-        yRatio: CGFloat,
-        chassisRightX: CGFloat,
-        chassisLeftX: CGFloat,
-        in size: CGSize
-    ) -> some View {
-        // Right stub: chassis curve → FR/BR inner edge (x = 0.77)
-        axleStub(fromX: chassisRightX, toX: 0.77, yRatio: yRatio, in: size)
-        // Left stub: FL/BL inner edge (x = 0.23) → chassis curve
-        axleStub(fromX: 0.23, toX: chassisLeftX, yRatio: yRatio, in: size)
-    }
-
-    private func axleStub(
-        fromX: CGFloat,
-        toX: CGFloat,
-        yRatio: CGFloat,
-        in size: CGSize
-    ) -> some View {
-        let leftX = size.width * fromX
-        let rightX = size.width * toX
-        let stubW = rightX - leftX
-        let stubHRatio: CGFloat = 0.014
-        let stubH = size.height * stubHRatio
-
-        // Sample the body's full-height gradient at the stub's actual y by
-        // extending the gradient axis past the stub's bounds. Without this
-        // the stub would compress 0.04 → 0.10 into its own 0.014 of height
-        // and read as a separate object stitched on.
-        let stubTopRatio = yRatio - stubHRatio / 2
-        let gradientStartY = -stubTopRatio / stubHRatio
-        let gradientEndY = (1 - stubTopRatio) / stubHRatio
-        let bodyMatchedFill = LinearGradient(
-            colors: [Theme.chassisFillTop, Theme.chassisFillBottom],
-            startPoint: UnitPoint(x: 0.5, y: gradientStartY),
-            endPoint: UnitPoint(x: 0.5, y: gradientEndY)
-        )
-
-        return Rectangle()
-            .fill(bodyMatchedFill)
-            .overlay(alignment: .top) {
-                Rectangle().fill(Theme.chassisLine).frame(height: 1)
-            }
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(Theme.chassisLine).frame(height: 1)
-            }
-            .frame(width: stubW, height: stubH)
-            .position(x: (leftX + rightX) / 2, y: size.height * yRatio)
-    }
-
     static func layout(for zone: CarZone) -> (center: CGPoint, size: CGSize) {
         switch zone {
         case .front:
@@ -160,17 +97,37 @@ struct RaceCarDiagramView: View {
     }
 }
 
-// MARK: - Chassis path
+// MARK: - Unified blueprint geometry
 
-private struct CarChassisShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let w = rect.width
-        let h = rect.height
-        // Narrow nose
+private enum BlueprintGeometry {
+    // Front/rear bumper rects in normalized coords (match RaceCarDiagramView.layout).
+    static let frontBumper = CGRect(x: 0.07, y: 0.0225, width: 0.86, height: 0.055)
+    static let rearBumper = CGRect(x: 0.02, y: 0.9225, width: 0.96, height: 0.065)
+    static let bumperCorner: CGFloat = 4
+
+    // Tire rects (4) + corner radius. Aligned with layout(for:) so per-zone
+    // accent overlays in ZoneCell sit exactly on top of these.
+    static let tireRects: [CGRect] = [
+        CGRect(x: 0.03, y: 0.155, width: 0.20, height: 0.13), // FL
+        CGRect(x: 0.77, y: 0.155, width: 0.20, height: 0.13), // FR
+        CGRect(x: 0.03, y: 0.715, width: 0.20, height: 0.13), // BL
+        CGRect(x: 0.77, y: 0.715, width: 0.20, height: 0.13)  // BR
+    ]
+    static let tireCorner: CGFloat = 6
+
+    // Axle stub bridges from chassis curve to tire inner edge. Inner tire
+    // edges sit at x = 0.23 (left side) and x = 0.77 (right side).
+    static let axleStubHeight: CGFloat = 0.014
+    static let axles: [(yRatio: CGFloat, chassisLeftX: CGFloat, chassisRightX: CGFloat)] = [
+        (0.22, 0.305, 0.695),
+        (0.78, 0.281, 0.719)
+    ]
+    static let leftTireInnerX: CGFloat = 0.23
+    static let rightTireInnerX: CGFloat = 0.77
+
+    static func addChassisSilhouette(to p: inout Path, w: CGFloat, h: CGFloat) {
         p.move(to: CGPoint(x: w * 0.36, y: h * 0.10))
         p.addLine(to: CGPoint(x: w * 0.64, y: h * 0.10))
-        // Right side: flare around cockpit and engine bay
         p.addQuadCurve(
             to: CGPoint(x: w * 0.74, y: h * 0.55),
             control: CGPoint(x: w * 0.76, y: h * 0.32)
@@ -179,9 +136,7 @@ private struct CarChassisShape: Shape {
             to: CGPoint(x: w * 0.62, y: h * 0.90),
             control: CGPoint(x: w * 0.80, y: h * 0.74)
         )
-        // Tail
         p.addLine(to: CGPoint(x: w * 0.38, y: h * 0.90))
-        // Left side: mirror back to nose
         p.addQuadCurve(
             to: CGPoint(x: w * 0.26, y: h * 0.55),
             control: CGPoint(x: w * 0.20, y: h * 0.74)
@@ -191,22 +146,168 @@ private struct CarChassisShape: Shape {
             control: CGPoint(x: w * 0.24, y: h * 0.32)
         )
         p.closeSubpath()
+    }
+
+    static func addBumpers(to p: inout Path, w: CGFloat, h: CGFloat) {
+        p.addRoundedRect(
+            in: CGRect(x: w * frontBumper.minX, y: h * frontBumper.minY,
+                       width: w * frontBumper.width, height: h * frontBumper.height),
+            cornerSize: CGSize(width: bumperCorner, height: bumperCorner)
+        )
+        p.addRoundedRect(
+            in: CGRect(x: w * rearBumper.minX, y: h * rearBumper.minY,
+                       width: w * rearBumper.width, height: h * rearBumper.height),
+            cornerSize: CGSize(width: bumperCorner, height: bumperCorner)
+        )
+    }
+
+    static func addTires(to p: inout Path, w: CGFloat, h: CGFloat) {
+        for tire in tireRects {
+            p.addRoundedRect(
+                in: CGRect(x: w * tire.minX, y: h * tire.minY,
+                           width: w * tire.width, height: h * tire.height),
+                cornerSize: CGSize(width: tireCorner, height: tireCorner)
+            )
+        }
+    }
+}
+
+// MARK: - Blueprint shapes (fill + stroke)
+
+// Filled regions for the entire blueprint. Stubs are drawn as full rectangles
+// so the gradient fills the gap between chassis curve and tire inner edge.
+private struct CarChassisFillShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let w = rect.width
+        let h = rect.height
+
+        BlueprintGeometry.addBumpers(to: &p, w: w, h: h)
+        BlueprintGeometry.addChassisSilhouette(to: &p, w: w, h: h)
+        BlueprintGeometry.addTires(to: &p, w: w, h: h)
+
+        // Axle stubs: full filled rectangles between chassis curve and tire.
+        let stubH = BlueprintGeometry.axleStubHeight
+        for axle in BlueprintGeometry.axles {
+            // Right stub: chassis edge → right tire inner edge
+            p.addRect(CGRect(
+                x: w * axle.chassisRightX,
+                y: h * (axle.yRatio - stubH / 2),
+                width: w * (BlueprintGeometry.rightTireInnerX - axle.chassisRightX),
+                height: h * stubH
+            ))
+            // Left stub: left tire inner edge → chassis edge
+            p.addRect(CGRect(
+                x: w * BlueprintGeometry.leftTireInnerX,
+                y: h * (axle.yRatio - stubH / 2),
+                width: w * (axle.chassisLeftX - BlueprintGeometry.leftTireInnerX),
+                height: h * stubH
+            ))
+        }
+
+        return p
+    }
+}
+
+// Stroked outlines for the entire blueprint. Stubs use only top/bottom lines
+// (no left/right) so the tire's inner edge and chassis curve aren't doubled
+// where they meet the stub. Centerline divider lives here too.
+private struct CarChassisStrokeShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let w = rect.width
+        let h = rect.height
+
+        BlueprintGeometry.addBumpers(to: &p, w: w, h: h)
+        BlueprintGeometry.addChassisSilhouette(to: &p, w: w, h: h)
+        BlueprintGeometry.addTires(to: &p, w: w, h: h)
+
+        // Centerline divider down the middle of the body
+        p.move(to: CGPoint(x: w * 0.5, y: h * 0.25))
+        p.addLine(to: CGPoint(x: w * 0.5, y: h * 0.75))
+
+        // Axle stubs: top and bottom horizontal lines only.
+        let stubH = BlueprintGeometry.axleStubHeight
+        for axle in BlueprintGeometry.axles {
+            let yTop = h * (axle.yRatio - stubH / 2)
+            let yBot = h * (axle.yRatio + stubH / 2)
+
+            // Right side
+            p.move(to: CGPoint(x: w * axle.chassisRightX, y: yTop))
+            p.addLine(to: CGPoint(x: w * BlueprintGeometry.rightTireInnerX, y: yTop))
+            p.move(to: CGPoint(x: w * axle.chassisRightX, y: yBot))
+            p.addLine(to: CGPoint(x: w * BlueprintGeometry.rightTireInnerX, y: yBot))
+
+            // Left side
+            p.move(to: CGPoint(x: w * BlueprintGeometry.leftTireInnerX, y: yTop))
+            p.addLine(to: CGPoint(x: w * axle.chassisLeftX, y: yTop))
+            p.move(to: CGPoint(x: w * BlueprintGeometry.leftTireInnerX, y: yBot))
+            p.addLine(to: CGPoint(x: w * axle.chassisLeftX, y: yBot))
+        }
+
         return p
     }
 }
 
 // MARK: - Zone cell
 
+// Per-zone overlay only: tap region, label, counter pill, tire treads, and
+// the orange highlight border + glow when a zone has populated metrics. The
+// underlying chassis fill/stroke is drawn once by the unified blueprint
+// shapes above, so there's no per-cell rectangle fill/stroke here.
 private struct ZoneCell: View {
     let zone: CarZone
     let state: ZoneFillState
     let action: () -> Void
 
-    // Slice of the body's full-height chassisFillTop → chassisFillBottom
-    // gradient, sampled at this zone's actual y range. Same UnitPoint
-    // extension trick the axle stubs use, so each zone reads as part of
-    // the body silhouette rather than a separate tile.
-    private var fillStyle: LinearGradient {
+    private var glowColor: Color {
+        state.isComplete ? Theme.accent.opacity(0.55) : .clear
+    }
+
+    private var labelColor: Color {
+        state.hasMetrics ? Theme.accent : Theme.textTertiary
+    }
+
+    private var counterColor: Color {
+        state.isComplete ? Theme.accent : Theme.textSecondary
+    }
+
+    var body: some View {
+        let cornerRadius = cornerRadius
+        Button(action: action) {
+            ZStack {
+                interiorOverlay
+                tireTreads
+                content
+            }
+            .shadow(color: glowColor, radius: state.hasMetrics ? 10 : 0)
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!state.hasMetrics)
+    }
+
+    // When a zone has metrics defined, draw a translucent fill that
+    // alpha-stacks with the unified blueprint's gradient — that's what
+    // gives the region a visibly distinct box. Empty zones (no metrics
+    // configured) blend into the blueprint silhouette.
+    @ViewBuilder
+    private var interiorOverlay: some View {
+        if state.hasMetrics {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(zoneFill)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(
+                    state.filled > 0 ? Theme.accent : Theme.chassisLine,
+                    lineWidth: state.filled > 0 ? 1.5 : 1
+                )
+        }
+    }
+
+    // Slice of the body's chassisFillTop → chassisFillBottom gradient,
+    // sampled at this zone's y range. Stacks on top of the blueprint
+    // fill to produce the distinct active-zone box.
+    private var zoneFill: LinearGradient {
         let layout = RaceCarDiagramView.layout(for: zone)
         let zoneH = layout.size.height
         guard zoneH > 0 else {
@@ -224,46 +325,6 @@ private struct ZoneCell: View {
             startPoint: UnitPoint(x: 0.5, y: startY),
             endPoint: UnitPoint(x: 0.5, y: endY)
         )
-    }
-
-    private var strokeColor: Color {
-        state.filled > 0 ? Theme.accent : Theme.chassisLine
-    }
-
-    private var strokeWidth: CGFloat {
-        state.filled > 0 ? 1.5 : 1
-    }
-
-    private var glowColor: Color {
-        if state.isComplete { return Theme.accent.opacity(0.55) }
-        if state.isPartial { return Theme.accent.opacity(0.30) }
-        return .clear
-    }
-
-    private var labelColor: Color {
-        state.hasMetrics ? Theme.accent : Theme.textTertiary
-    }
-
-    private var counterColor: Color {
-        state.isComplete ? Theme.accent : Theme.textSecondary
-    }
-
-    var body: some View {
-        let cornerRadius = cornerRadius
-        Button(action: action) {
-            ZStack {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(fillStyle)
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(strokeColor, lineWidth: strokeWidth)
-                tireTreads
-                content
-            }
-            .shadow(color: glowColor, radius: state.hasMetrics ? 10 : 0)
-            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(!state.hasMetrics)
     }
 
     private var cornerRadius: CGFloat {

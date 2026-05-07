@@ -337,8 +337,8 @@ struct AddSessionView: View {
             Button {
                 showingResetConfirm = true
             } label: {
-                Image(systemName: "arrow.counterclockwise.circle.fill")
-                    .font(.system(size: 20, weight: .bold))
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 20, weight: .regular))
                     .foregroundColor(Theme.accent)
             }
             .accessibilityLabel("Reset session")
@@ -706,7 +706,6 @@ struct AddSessionView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(Theme.accent.opacity(0.55), lineWidth: 1.5)
         )
-        .shadow(color: Theme.accent.opacity(0.35), radius: 28)
     }
 
     private var expandedZoneFooter: some View {
