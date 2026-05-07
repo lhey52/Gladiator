@@ -13,6 +13,7 @@ import SwiftUI
 struct NumberPadBubble: View {
     @Binding var text: String
     let onDone: () -> Void
+    var onNext: (() -> Void)? = nil
 
     static let preferredWidth: CGFloat = 220
 
@@ -27,6 +28,9 @@ struct NumberPadBubble: View {
                 backspaceButton
             }
             doneButton
+            if let onNext {
+                nextButton(action: onNext)
+            }
         }
         .padding(12)
         .background(
@@ -106,6 +110,25 @@ struct NumberPadBubble: View {
         .buttonStyle(NumberPadButtonStyle())
     }
 
+    private func nextButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text("NEXT")
+                .font(.system(size: 13, weight: .heavy))
+                .tracking(1.6)
+                .foregroundColor(Theme.accent)
+                .frame(maxWidth: .infinity, minHeight: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Theme.surfaceElevated)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Theme.accent.opacity(0.5), lineWidth: 1)
+                )
+        }
+        .buttonStyle(NumberPadButtonStyle())
+    }
+
     private func insert(_ d: String) {
         if d == "." {
             // Only one decimal point allowed; auto-prefix a leading zero so
@@ -143,6 +166,7 @@ struct NumberPadBubbleOverlay: View {
     let anchorFrame: CGRect
     @Binding var text: String
     let onDismiss: () -> Void
+    var onNext: (() -> Void)? = nil
 
     private let bubbleWidth: CGFloat = NumberPadBubble.preferredWidth
     private let estimatedHeight: CGFloat = 256
@@ -165,7 +189,7 @@ struct NumberPadBubbleOverlay: View {
                     .contentShape(Rectangle())
                     .onTapGesture { onDismiss() }
 
-                NumberPadBubble(text: $text, onDone: onDismiss)
+                NumberPadBubble(text: $text, onDone: onDismiss, onNext: onNext)
                     .frame(width: bubbleWidth)
                     .background(
                         GeometryReader { bubbleGeo in

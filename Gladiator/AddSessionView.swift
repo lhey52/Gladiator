@@ -50,7 +50,7 @@ struct AddSessionView: View {
     @State private var toastIcon: String = ""
     @State private var toastText: String = ""
     @State private var showToast: Bool = false
-    @State private var isPitBoxExpanded: Bool = false
+    @State private var isSessionExpanded: Bool = false
     @State private var isNotesExpanded: Bool = false
     @FocusState private var focusedField: SessionFormField?
 
@@ -61,7 +61,7 @@ struct AddSessionView: View {
     private var allFields: [SessionFormField] {
         // While a zone is expanded, the chevrons walk only that zone's
         // text fields so focus doesn't jump out of the focused card. In
-        // the resting state, pit-box text fields walk into Notes.
+        // the resting state, session text fields walk into Notes.
         if let zone = expandedZone {
             return customFields
                 .filter { $0.zone == zone && $0.fieldType == .text }
@@ -137,7 +137,10 @@ struct AddSessionView: View {
                     NumberPadBubbleOverlay(
                         anchorFrame: frame,
                         text: bindingForField(field),
-                        onDismiss: { activeNumberField = nil }
+                        onDismiss: { activeNumberField = nil },
+                        onNext: nextNumberField(after: activeName).map { nextField in
+                            { activeNumberField = nextField.name }
+                        }
                     )
                     .transition(.opacity)
                 }
@@ -194,7 +197,7 @@ struct AddSessionView: View {
         sessionType = .practice
         notes = ""
         fieldEntries = [:]
-        isPitBoxExpanded = false
+        isSessionExpanded = false
         isNotesExpanded = false
         loadDefaults()
     }
@@ -240,6 +243,18 @@ struct AddSessionView: View {
             try? await Task.sleep(for: .seconds(2))
             showToast = false
         }
+    }
+
+    // Cycle within a zone's number metrics for the number-pad "Next"
+    // button. Returns nil if the zone has only one number metric — the
+    // pad hides Next in that case.
+    private func nextNumberField(after fieldName: String) -> CustomField? {
+        guard let current = customFields.first(where: { $0.name == fieldName }) else { return nil }
+        let zoneNumberFields = customFields.filter { $0.zone == current.zone && $0.fieldType == .number }
+        guard zoneNumberFields.count > 1 else { return nil }
+        guard let idx = zoneNumberFields.firstIndex(where: { $0.name == fieldName }) else { return nil }
+        let nextIdx = (idx + 1) % zoneNumberFields.count
+        return zoneNumberFields[nextIdx]
     }
 
     private func isFieldFilled(_ field: CustomField) -> Bool {
@@ -355,7 +370,7 @@ struct AddSessionView: View {
 
     private var raceCarSection: some View {
         VStack(spacing: 0) {
-            cardHeader("ZONES")
+            cardHeader("SETUP")
             RaceCarDiagramView(
                 zoneStates: zoneStates,
                 expandedZone: expandedZone,
@@ -394,11 +409,11 @@ struct AddSessionView: View {
         .padding(.bottom, 10)
     }
 
-    // MARK: - Setup card (Pit Box + Notes)
+    // MARK: - Setup card (Session + Notes)
 
     private var setupCard: some View {
         VStack(alignment: .leading, spacing: 20) {
-            pitBoxSection
+            sessionSection
             Divider().background(Theme.hairline)
             notesSection
         }
@@ -436,30 +451,30 @@ struct AddSessionView: View {
         .buttonStyle(.plain)
     }
 
-    private var pitBoxSection: some View {
+    private var sessionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             collapsibleHeader(
-                title: "PIT BOX",
+                title: "SESSION",
                 systemImage: "shippingbox.fill",
-                isExpanded: isPitBoxExpanded
+                isExpanded: isSessionExpanded
             ) {
                 withAnimation(.easeInOut(duration: 0.25)) {
-                    if isPitBoxExpanded { activeNumberField = nil }
-                    isPitBoxExpanded.toggle()
+                    if isSessionExpanded { activeNumberField = nil }
+                    isSessionExpanded.toggle()
                 }
             }
 
-            if isPitBoxExpanded {
-                pitBoxFields
+            if isSessionExpanded {
+                sessionFields
             }
         }
     }
 
-    private var pitBoxFields: some View {
+    private var sessionFields: some View {
         VStack(spacing: 0) {
             typeChips
                 .padding(.bottom, 6)
-            pitInfoRow(label: "TRACK") {
+            infoRow(label: "TRACK") {
                 Picker("", selection: $trackName) {
                     Text("Select Track")
                         .foregroundColor(Theme.textTertiary)
@@ -472,7 +487,7 @@ struct AddSessionView: View {
                 .tint(Theme.accent)
                 .labelsHidden()
             }
-            pitInfoRow(label: "VEHICLE") {
+            infoRow(label: "VEHICLE") {
                 Picker("", selection: $vehicleName) {
                     Text("Select Vehicle")
                         .foregroundColor(Theme.textTertiary)
@@ -485,7 +500,7 @@ struct AddSessionView: View {
                 .tint(Theme.accent)
                 .labelsHidden()
             }
-            pitInfoRow(label: "DATE") {
+            infoRow(label: "DATE") {
                 DatePicker(
                     "",
                     selection: $date,
@@ -497,7 +512,7 @@ struct AddSessionView: View {
                 .colorScheme(.dark)
             }
             ForEach(generalFields) { field in
-                pitMetricRow(field: field)
+                metricRow(field: field)
             }
         }
     }
@@ -518,7 +533,7 @@ struct AddSessionView: View {
             HStack(spacing: 5) {
                 Image(systemName: type.systemImage)
                     .font(.system(size: 11, weight: .bold))
-                Text(type.rawValue.uppercased())
+                Text(type.shortLabel)
                     .font(.system(size: 11, weight: .heavy))
                     .tracking(1.5)
                     .lineLimit(1)
@@ -539,7 +554,7 @@ struct AddSessionView: View {
     }
 
     @ViewBuilder
-    private func pitInfoRow<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+    private func infoRow<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
         HStack {
             Text(label)
                 .font(.system(size: 11, weight: .heavy))
@@ -551,7 +566,7 @@ struct AddSessionView: View {
         .padding(.vertical, 12)
     }
 
-    private func pitMetricRow(field: CustomField) -> some View {
+    private func metricRow(field: CustomField) -> some View {
         let parts = CustomField.split(name: field.name)
         return HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
@@ -567,13 +582,13 @@ struct AddSessionView: View {
                 }
             }
             Spacer()
-            pitMetricInput(field: field)
+            metricInput(field: field)
         }
         .padding(.vertical, 12)
     }
 
     @ViewBuilder
-    private func pitMetricInput(field: CustomField) -> some View {
+    private func metricInput(field: CustomField) -> some View {
         switch field.fieldType {
         case .time:
             let timeBinding = Binding<Double>(
@@ -594,11 +609,11 @@ struct AddSessionView: View {
             .autocorrectionDisabled()
             .focused($focusedField, equals: .metricText(field.name))
         case .number:
-            pitNumberFieldButton(field: field)
+            numberFieldButton(field: field)
         }
     }
 
-    private func pitNumberFieldButton(field: CustomField) -> some View {
+    private func numberFieldButton(field: CustomField) -> some View {
         let raw = fieldEntries[field.name, default: ""]
         let isActive = activeNumberField == field.name
         return Button {
@@ -688,7 +703,7 @@ struct AddSessionView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(expandedZoneFields) { field in
-                            pitMetricRow(field: field)
+                            metricRow(field: field)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -709,16 +724,23 @@ struct AddSessionView: View {
     }
 
     private var expandedZoneFooter: some View {
-        HStack(spacing: 12) {
-            zoneNavButton(label: "PREVIOUS", systemImage: "chevron.left", isLeading: true) {
-                navigateZone(by: -1)
-            }
-            zoneNavButton(label: "NEXT", systemImage: "chevron.right", isLeading: false) {
-                navigateZone(by: 1)
+        VStack(spacing: 8) {
+            Text("ZONE NAVIGATION")
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+                .frame(maxWidth: .infinity)
+            HStack(spacing: 12) {
+                zoneNavButton(label: "PREVIOUS", systemImage: "chevron.left", isLeading: true) {
+                    navigateZone(by: -1)
+                }
+                zoneNavButton(label: "NEXT", systemImage: "chevron.right", isLeading: false) {
+                    navigateZone(by: 1)
+                }
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 8)
+        .padding(.top, 12)
         .padding(.bottom, 18)
     }
 

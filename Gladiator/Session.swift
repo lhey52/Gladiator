@@ -10,6 +10,7 @@ enum SessionType: String, CaseIterable, Codable, Identifiable {
     case practice = "Practice"
     case qualifying = "Qualifying"
     case race = "Race"
+    case setup = "Setup"
 
     var id: String { rawValue }
 
@@ -18,6 +19,7 @@ enum SessionType: String, CaseIterable, Codable, Identifiable {
         case .practice: return "PRAC"
         case .qualifying: return "QUAL"
         case .race: return "RACE"
+        case .setup: return "SETUP"
         }
     }
 
@@ -26,6 +28,7 @@ enum SessionType: String, CaseIterable, Codable, Identifiable {
         case .practice: return "stopwatch"
         case .qualifying: return "timer"
         case .race: return "flag.checkered"
+        case .setup: return "wrench.and.screwdriver"
         }
     }
 }

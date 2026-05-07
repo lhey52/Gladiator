@@ -31,7 +31,7 @@ struct RaceEngineerContributor: Identifiable {
     }
 
     // Higher values associated with a "better" outcome depends on the outcome
-    // field type; Race Engineer interprets sign in the view layer because it
+    // field type; Race Engineer v2 interprets sign in the view layer because it
     // needs both the outcome and predictor types.
     var isHigherBetter: Bool {
         standardizedCoefficient < 0
@@ -83,7 +83,7 @@ enum RaceEngineerOutcome {
 // MARK: - Engine
 
 enum BestSubsetEngine {
-    // Race Engineer is capped at 15 predictors to keep the subset search
+    // Race Engineer v2 is capped at 15 predictors to keep the subset search
     // tractable (2^15 − 1 = 32,767 subsets). Beyond that the search becomes
     // expensive and the data rarely supports that many predictors anyway.
     static let maxSubsetSize = 15

@@ -128,7 +128,7 @@ struct PitInfoSheet: View {
             HStack(spacing: 5) {
                 Image(systemName: type.systemImage)
                     .font(.system(size: 11, weight: .bold))
-                Text(type.rawValue.uppercased())
+                Text(type.shortLabel)
                     .font(.system(size: 11, weight: .heavy))
                     .tracking(1.5)
                     .lineLimit(1)

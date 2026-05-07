@@ -199,7 +199,7 @@ struct SessionsView: View {
                 }
                 ForEach(SessionType.allCases) { type in
                     FilterChip(
-                        title: type.rawValue.uppercased(),
+                        title: type.shortLabel,
                         isSelected: typeFilter == type
                     ) {
                         typeFilter = (typeFilter == type) ? nil : type
@@ -364,6 +364,7 @@ private struct SessionRow: View {
         case .race: return Theme.accent
         case .qualifying: return Theme.accent.opacity(0.65)
         case .practice: return Theme.accent.opacity(0.35)
+        case .setup: return Theme.accent.opacity(0.2)
         }
     }
 

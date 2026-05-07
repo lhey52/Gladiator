@@ -48,7 +48,7 @@ struct RaceEngineerView: View {
     var body: some View {
         if isInitialLoading {
             AnalyticsLoadingView(
-                toolName: "Race Engineer",
+                toolName: "Race Engineer v2",
                 sessionCount: sessions.count,
                 onComplete: { isInitialLoading = false }
             )
@@ -67,7 +67,7 @@ struct RaceEngineerView: View {
                     analyzingOverlay
                 }
             }
-            .navigationTitle("Race Engineer")
+            .navigationTitle("Race Engineer v2")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -142,12 +142,12 @@ struct RaceEngineerView: View {
             emptyState(
                 icon: "chart.line.flattrend.xyaxis",
                 headline: "ADD 2+ METRICS",
-                message: "Race Engineer needs at least 2 Number or Time metrics. Add more in Settings to unlock automatic setup analysis."
+                message: "Race Engineer v2 needs at least 2 Number or Time metrics. Add more in Settings to unlock automatic setup analysis."
             )
         } else {
             ScrollView {
                 VStack(spacing: 18) {
-                    ToolDescriptionCard(text: "Race Engineer runs best subset selection across every Number and Time metric you log to automatically identify the combination with the strongest predictive power for your chosen metric. It then returns actionable, range-based setup targets drawn from your session history.")
+                    ToolDescriptionCard(text: "Race Engineer v2 runs best subset selection across every Number and Time metric you log to automatically identify the combination with the strongest predictive power for your chosen metric. It then returns actionable, range-based setup targets drawn from your session history.")
                     outcomeCard
                     analyzeButton
                     resultSection
@@ -241,7 +241,7 @@ struct RaceEngineerView: View {
             }
             .buttonStyle(.plain)
 
-            Text("Race Engineer will test every combination of your other \(candidatePredictors.count) Number and Time metric\(candidatePredictors.count == 1 ? "" : "s") (up to \(BestSubsetEngine.maxSubsetSize) at once) and pick the combination with the highest Adjusted R².")
+            Text("Race Engineer v2 will test every combination of your other \(candidatePredictors.count) Number and Time metric\(candidatePredictors.count == 1 ? "" : "s") (up to \(BestSubsetEngine.maxSubsetSize) at once) and pick the combination with the highest Adjusted R².")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(Theme.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -295,7 +295,7 @@ struct RaceEngineerView: View {
                     .progressViewStyle(.circular)
                     .tint(Theme.accent)
                     .scaleEffect(1.4)
-                Text("RACE ENGINEER")
+                Text("RACE ENGINEER V2")
                     .font(.system(size: 13, weight: .heavy))
                     .tracking(2.5)
                     .foregroundColor(Theme.accent)
@@ -322,13 +322,13 @@ struct RaceEngineerView: View {
             warningCard(
                 icon: "exclamationmark.triangle",
                 headline: "NOT ENOUGH DATA",
-                message: "Race Engineer needs at least \(minimum) session\(minimum == 1 ? "" : "s") per predictor to produce reliable results. You currently have \(n) session\(n == 1 ? "" : "s") with this outcome recorded. Add more sessions or relax your filters to run this analysis."
+                message: "Race Engineer v2 needs at least \(minimum) session\(minimum == 1 ? "" : "s") per predictor to produce reliable results. You currently have \(n) session\(n == 1 ? "" : "s") with this outcome recorded. Add more sessions or relax your filters to run this analysis."
             )
         case .insufficientCandidates:
             warningCard(
                 icon: "exclamationmark.triangle",
                 headline: "NOT ENOUGH METRICS",
-                message: "Race Engineer needs at least one other Number or Time metric besides the outcome. Add more metrics in Settings."
+                message: "Race Engineer v2 needs at least one other Number or Time metric besides the outcome. Add more metrics in Settings."
             )
         case .noVariance:
             warningCard(
@@ -475,7 +475,7 @@ private struct RaceEngineerResultCard: View {
                     .font(.system(size: 28, weight: .heavy, design: .rounded))
                     .foregroundColor(Theme.accent)
             }
-            Text("Race Engineer has identified \(result.predictors.count) metric\(result.predictors.count == 1 ? "" : "s") that together appear to influence approximately \(adjustedRSquaredPercent)% of your \(result.outcome). The remaining \(100 - adjustedRSquaredPercent)% of variation lies outside your current tracked data.")
+            Text("Race Engineer v2 has identified \(result.predictors.count) metric\(result.predictors.count == 1 ? "" : "s") that together appear to influence approximately \(adjustedRSquaredPercent)% of your \(result.outcome). The remaining \(100 - adjustedRSquaredPercent)% of variation lies outside your current tracked data.")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)

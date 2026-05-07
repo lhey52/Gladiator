@@ -78,7 +78,7 @@ struct EditMetricView: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Confirm") { performSave() }
             } message: {
-                Text("You have entered 0 for Step Size. This indicates you are not able to control this metric and may impact setup suggestions in Race Engineer. Are you sure?")
+                Text("You have entered 0 for Step Size. This indicates you are not able to control this metric and may impact setup suggestions in Race Engineer v2. Are you sure?")
             }
             .alert("Note", isPresented: $showLargeStepAlert) {
                 Button("Cancel", role: .cancel) {}

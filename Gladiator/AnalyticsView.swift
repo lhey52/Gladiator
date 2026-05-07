@@ -59,12 +59,14 @@ struct AnalyticsView: View {
                             ScatterPlotView()
                         }
 
-                        AnalyticsCard(
-                            icon: "list.bullet.rectangle",
-                            title: "Metric Log",
-                            description: "View all recorded values for any metric across your sessions"
-                        ) {
-                            MetricLogView()
+                        if AppConfig.isMetricLogEnabled {
+                            AnalyticsCard(
+                                icon: "list.bullet.rectangle",
+                                title: "Metric Log",
+                                description: "View all recorded values for any metric across your sessions"
+                            ) {
+                                MetricLogView()
+                            }
                         }
 
                         AnalyticsCard(
@@ -75,12 +77,14 @@ struct AnalyticsView: View {
                             CorrelationView()
                         }
 
-                        AnalyticsCard(
-                            icon: "tablecells",
-                            title: "Correlation Matrix",
-                            description: "Heat map of correlations across all metric pairs"
-                        ) {
-                            CorrelationMatrixView()
+                        if AppConfig.isCorrelationMatrixEnabled {
+                            AnalyticsCard(
+                                icon: "tablecells",
+                                title: "Correlation Matrix",
+                                description: "Heat map of correlations across all metric pairs"
+                            ) {
+                                CorrelationMatrixView()
+                            }
                         }
 
                         AnalyticsCard(
@@ -99,28 +103,34 @@ struct AnalyticsView: View {
                             TrendAnalysisView()
                         }
 
-                        AnalyticsCard(
-                            icon: "trophy.fill",
-                            title: "Personal Bests",
-                            description: "All-time best values across every metric"
-                        ) {
-                            PersonalBestsView()
+                        if AppConfig.isPersonalBestsEnabled {
+                            AnalyticsCard(
+                                icon: "trophy.fill",
+                                title: "Personal Bests",
+                                description: "All-time best values across every metric"
+                            ) {
+                                PersonalBestsView()
+                            }
                         }
 
-                        AnalyticsCard(
-                            icon: "target",
-                            title: "Performance Predictor",
-                            description: "Discover which setup combinations best predict your performance"
-                        ) {
-                            PerformancePredictorView()
+                        if AppConfig.isPerformancePredictorEnabled {
+                            AnalyticsCard(
+                                icon: "target",
+                                title: "Performance Predictor",
+                                description: "Discover which setup combinations best predict your performance"
+                            ) {
+                                PerformancePredictorView()
+                            }
                         }
 
-                        AnalyticsCard(
-                            icon: "wand.and.stars",
-                            title: "Race Engineer",
-                            description: "Automatically identify your most influential setup metrics and get actionable targets"
-                        ) {
-                            RaceEngineerView()
+                        if AppConfig.isRaceEngineerEnabled {
+                            AnalyticsCard(
+                                icon: "wand.and.stars",
+                                title: "Race Engineer v2",
+                                description: "Automatically identify your most influential setup metrics and get actionable targets"
+                            ) {
+                                RaceEngineerView()
+                            }
                         }
                     }
                     .padding(20)
