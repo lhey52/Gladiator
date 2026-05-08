@@ -32,6 +32,8 @@ struct PitInfoSheet: View {
     @FocusState private var focusedField: String?
     @State private var activeNumberField: String?
     @State private var fieldFrames: [String: CGRect] = [:]
+    @State private var showingAddTrack: Bool = false
+    @State private var showingAddVehicle: Bool = false
 
     private var focusableNames: [String] {
         // Number fields use the bubble (not focused) and Time fields use a
@@ -66,6 +68,14 @@ struct PitInfoSheet: View {
             .keyboardToolbar(focusedField: $focusedField, fields: focusableNames)
         }
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showingAddTrack) {
+            NavigationStack { TracksView() }
+                .preferredColorScheme(.dark)
+        }
+        .sheet(isPresented: $showingAddVehicle) {
+            NavigationStack { VehicleView() }
+                .preferredColorScheme(.dark)
+        }
     }
 
     private var content: some View {
@@ -159,35 +169,70 @@ struct PitInfoSheet: View {
 
     // MARK: - Track / Vehicle / Date rows
 
+    // Custom Menu instead of Picker so the dropdown can host an "Add
+    // New" entry — taps present the matching customization view in a
+    // sheet on top of this one. The @Query that feeds `tracks` /
+    // `vehicles` lives in the parent (Add/Edit Session), so anything
+    // added there is in the list as soon as this sheet is opened next.
     private var trackRow: some View {
         infoRow(label: "TRACK") {
-            Picker("", selection: $trackName) {
-                Text("Select Track")
-                    .foregroundColor(Theme.textTertiary)
-                    .tag("")
+            Menu {
                 ForEach(tracks) { track in
-                    Text(track.name).tag(track.name)
+                    Button {
+                        trackName = track.name
+                    } label: {
+                        if trackName == track.name {
+                            Label(track.name, systemImage: "checkmark")
+                        } else {
+                            Text(track.name)
+                        }
+                    }
                 }
+                Divider()
+                Button {
+                    showingAddTrack = true
+                } label: {
+                    Label("Add New", systemImage: "plus.circle")
+                }
+            } label: {
+                menuLabel(placeholder: "Select Track", value: trackName)
             }
-            .pickerStyle(.menu)
-            .tint(Theme.accent)
-            .labelsHidden()
         }
     }
 
     private var vehicleRow: some View {
         infoRow(label: "VEHICLE") {
-            Picker("", selection: $vehicleName) {
-                Text("Select Vehicle")
-                    .foregroundColor(Theme.textTertiary)
-                    .tag("")
+            Menu {
                 ForEach(vehicles) { vehicle in
-                    Text(vehicle.name).tag(vehicle.name)
+                    Button {
+                        vehicleName = vehicle.name
+                    } label: {
+                        if vehicleName == vehicle.name {
+                            Label(vehicle.name, systemImage: "checkmark")
+                        } else {
+                            Text(vehicle.name)
+                        }
+                    }
                 }
+                Divider()
+                Button {
+                    showingAddVehicle = true
+                } label: {
+                    Label("Add New", systemImage: "plus.circle")
+                }
+            } label: {
+                menuLabel(placeholder: "Select Vehicle", value: vehicleName)
             }
-            .pickerStyle(.menu)
-            .tint(Theme.accent)
-            .labelsHidden()
+        }
+    }
+
+    private func menuLabel(placeholder: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Text(value.isEmpty ? placeholder : value)
+                .foregroundColor(value.isEmpty ? Theme.textTertiary : Theme.accent)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Theme.accent)
         }
     }
 

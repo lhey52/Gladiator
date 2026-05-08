@@ -51,6 +51,8 @@ struct AddSessionView: View {
     @State private var activeNumberField: String?
     @State private var fieldFrames: [String: CGRect] = [:]
     @State private var showingPaywall: Bool = false
+    @State private var showingAddTrack: Bool = false
+    @State private var showingAddVehicle: Bool = false
     @Namespace private var zoneNamespace
     @State private var showingResetConfirm: Bool = false
     @State private var toastIcon: String = ""
@@ -170,6 +172,14 @@ struct AddSessionView: View {
             }
             .fullScreenCover(isPresented: $showingPaywall) {
                 PaywallView(limitMessage: "You have reached the free limit of \(IAPManager.sessionLimit) sessions. Upgrade to Pro for unlimited sessions.")
+            }
+            .sheet(isPresented: $showingAddTrack) {
+                NavigationStack { TracksView() }
+                    .preferredColorScheme(.dark)
+            }
+            .sheet(isPresented: $showingAddVehicle) {
+                NavigationStack { VehicleView() }
+                    .preferredColorScheme(.dark)
             }
         }
         .preferredColorScheme(.dark)
@@ -489,30 +499,10 @@ struct AddSessionView: View {
             typeChips
                 .padding(.bottom, 6)
             infoRow(label: "TRACK") {
-                Picker("", selection: $trackName) {
-                    Text("Select Track")
-                        .foregroundColor(Theme.textTertiary)
-                        .tag("")
-                    ForEach(tracks) { track in
-                        Text(track.name).tag(track.name)
-                    }
-                }
-                .pickerStyle(.menu)
-                .tint(Theme.accent)
-                .labelsHidden()
+                trackMenu
             }
             infoRow(label: "VEHICLE") {
-                Picker("", selection: $vehicleName) {
-                    Text("Select Vehicle")
-                        .foregroundColor(Theme.textTertiary)
-                        .tag("")
-                    ForEach(vehicles) { vehicle in
-                        Text(vehicle.name).tag(vehicle.name)
-                    }
-                }
-                .pickerStyle(.menu)
-                .tint(Theme.accent)
-                .labelsHidden()
+                vehicleMenu
             }
             infoRow(label: "DATE") {
                 DatePicker(
@@ -528,6 +518,76 @@ struct AddSessionView: View {
             ForEach(generalFields) { field in
                 metricRow(field: field)
             }
+        }
+    }
+
+    // Track / Vehicle dropdowns are custom Menus rather than SwiftUI
+    // Pickers because Picker can't host an arbitrary "Add New" Button at
+    // the bottom — the Menu-based form lets the driver jump straight to
+    // the customization view to add a missing entry without losing the
+    // session draft (the new sheet sits on top, the @Query auto-refreshes
+    // when it dismisses).
+    private var trackMenu: some View {
+        Menu {
+            ForEach(tracks) { track in
+                Button {
+                    trackName = track.name
+                } label: {
+                    if trackName == track.name {
+                        Label(track.name, systemImage: "checkmark")
+                    } else {
+                        Text(track.name)
+                    }
+                }
+            }
+            Divider()
+            Button {
+                showingAddTrack = true
+            } label: {
+                Label("Add New", systemImage: "plus.circle")
+            }
+        } label: {
+            menuLabel(
+                placeholder: "Select Track",
+                value: trackName
+            )
+        }
+    }
+
+    private var vehicleMenu: some View {
+        Menu {
+            ForEach(vehicles) { vehicle in
+                Button {
+                    vehicleName = vehicle.name
+                } label: {
+                    if vehicleName == vehicle.name {
+                        Label(vehicle.name, systemImage: "checkmark")
+                    } else {
+                        Text(vehicle.name)
+                    }
+                }
+            }
+            Divider()
+            Button {
+                showingAddVehicle = true
+            } label: {
+                Label("Add New", systemImage: "plus.circle")
+            }
+        } label: {
+            menuLabel(
+                placeholder: "Select Vehicle",
+                value: vehicleName
+            )
+        }
+    }
+
+    private func menuLabel(placeholder: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Text(value.isEmpty ? placeholder : value)
+                .foregroundColor(value.isEmpty ? Theme.textTertiary : Theme.accent)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Theme.accent)
         }
     }
 
