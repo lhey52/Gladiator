@@ -20,6 +20,14 @@ struct CorrelationMatrixView: View {
     @State private var isLoading: Bool = true
     @ObservedObject private var iap = IAPManager.shared
 
+    // Cached scanner output, populated by the .task(id:) below. Was
+    // previously a computed property that re-ran scanPairs (an N×N
+    // Pearson sweep over the filtered sessions) on every body
+    // re-evaluation. With 40+ sessions and 40+ metrics that became a
+    // multi-second main-thread stall every render.
+    @State private var pairResults: [CorrelationPairResult] = []
+    @State private var pairLookup: [String: CorrelationPairResult] = [:]
+
     private let cellSize: CGFloat = 64
     private let rowHeaderWidth: CGFloat = 108
 
@@ -27,24 +35,45 @@ struct CorrelationMatrixView: View {
         allFields.filter { $0.fieldType.isPlottable }
     }
 
+    // Real-model filtered list — still needed by
+    // CorrelationPairDetailView, which expects [Session] and not
+    // snapshots. Cheap because AnalyticsFilterState only reads
+    // trackName/vehicleName/date (no @Relationship faulting).
     private var filteredSessions: [Session] {
         filter.apply(to: sessions)
     }
 
-    private var pairResults: [CorrelationPairResult] {
-        BackgroundCorrelationScanner.scanPairs(sessions: filteredSessions, fields: allFields)
-    }
-
-    private var pairLookup: [String: CorrelationPairResult] {
-        var map: [String: CorrelationPairResult] = [:]
-        for result in pairResults {
-            map[Self.pairKey(result.fieldA, result.fieldB)] = result
-        }
-        return map
-    }
-
     private var hasAnyResults: Bool {
         !pairResults.isEmpty
+    }
+
+    // Drives `.task(id:)` — restarts the scan whenever the underlying
+    // dataset or the active filter changes. Keyed off counts, the
+    // latest createdAt, and the four filter fields. Editing an
+    // existing FieldValue's text in place won't re-trigger the scan
+    // (same documented tradeoff as AnalyticsView's insights cache).
+    private struct MatrixFingerprint: Hashable {
+        let sessionCount: Int
+        let fieldCount: Int
+        let valueCount: Int
+        let latestCreatedAt: Date?
+        let selectedTracks: Set<String>
+        let selectedVehicles: Set<String>
+        let startDate: Date?
+        let endDate: Date?
+    }
+
+    private var matrixFingerprint: MatrixFingerprint {
+        MatrixFingerprint(
+            sessionCount: sessions.count,
+            fieldCount: allFields.count,
+            valueCount: sessions.reduce(0) { $0 + $1.fieldValues.count },
+            latestCreatedAt: sessions.map(\.createdAt).max(),
+            selectedTracks: filter.selectedTracks,
+            selectedVehicles: filter.selectedVehicles,
+            startDate: filter.startDate,
+            endDate: filter.endDate
+        )
     }
 
     var body: some View {
@@ -93,6 +122,27 @@ struct CorrelationMatrixView: View {
             }
             .fullScreenCover(isPresented: $showingPaywall) {
                 PaywallView()
+            }
+            .task(id: matrixFingerprint) {
+                // Snapshot all sessions + fields on the main actor,
+                // apply the filter to the snapshot list, then run
+                // scanPairs in a detached task so the N×N Pearson
+                // sweep is off main. Cancellation is checked before
+                // mutating @State.
+                let snapshot = AnalyticsSnapshot(sessions: sessions, fields: allFields)
+                let filtered = filter.apply(toSnapshots: snapshot.sessions)
+                let computed = await Task.detached(priority: .userInitiated) {
+                    BackgroundCorrelationScanner.scanPairs(sessions: filtered, fields: snapshot.fields)
+                }.value
+                if !Task.isCancelled {
+                    pairResults = computed
+                    var map: [String: CorrelationPairResult] = [:]
+                    map.reserveCapacity(computed.count)
+                    for result in computed {
+                        map[Self.pairKey(result.fieldA, result.fieldB)] = result
+                    }
+                    pairLookup = map
+                }
             }
         }
         .preferredColorScheme(.dark)

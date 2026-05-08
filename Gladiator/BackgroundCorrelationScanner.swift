@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct CorrelationPairResult: Identifiable {
+struct CorrelationPairResult: Identifiable, Sendable {
     let id = UUID()
     let trackName: String
     let vehicleName: String
@@ -24,8 +24,8 @@ enum BackgroundCorrelationScanner {
         let vehicle: String
     }
 
-    static func scanAll(sessions: [Session], fields: [CustomField]) -> [CorrelationPairResult] {
-        let plottable = fields.filter { $0.fieldType.isPlottable }
+    static func scanAll(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [CorrelationPairResult] {
+        let plottable = fields.filter(\.isPlottable)
         guard plottable.count >= 2 else { return [] }
 
         let grouped = Dictionary(grouping: sessions) { GroupKey(track: $0.trackName, vehicle: $0.vehicleName) }
@@ -51,8 +51,8 @@ enum BackgroundCorrelationScanner {
         return results
     }
 
-    static func scanPairs(sessions: [Session], fields: [CustomField]) -> [CorrelationPairResult] {
-        let plottable = fields.filter { $0.fieldType.isPlottable }
+    static func scanPairs(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [CorrelationPairResult] {
+        let plottable = fields.filter(\.isPlottable)
         guard plottable.count >= 2 else { return [] }
 
         var results: [CorrelationPairResult] = []
@@ -72,15 +72,19 @@ enum BackgroundCorrelationScanner {
         return results
     }
 
-    private static func correlate(trackName: String, vehicleName: String, sessions: [Session], fieldA: String, fieldB: String) -> CorrelationPairResult? {
+    private static func correlate(trackName: String, vehicleName: String, sessions: [SessionSnapshot], fieldA: String, fieldB: String) -> CorrelationPairResult? {
         var xs: [Double] = []
         var ys: [Double] = []
+        xs.reserveCapacity(sessions.count)
+        ys.reserveCapacity(sessions.count)
 
         for session in sessions {
-            guard let aVal = session.fieldValues.first(where: { $0.fieldName == fieldA }),
-                  let bVal = session.fieldValues.first(where: { $0.fieldName == fieldB }),
-                  let x = Double(aVal.value),
-                  let y = Double(bVal.value) else { continue }
+            // O(1) dict lookup — replaces the old O(n) linear scan
+            // through `session.fieldValues.first(where:)` per session.
+            guard let aVal = session.fieldValues[fieldA],
+                  let bVal = session.fieldValues[fieldB],
+                  let x = aVal.doubleValue,
+                  let y = bVal.doubleValue else { continue }
             xs.append(x)
             ys.append(y)
         }

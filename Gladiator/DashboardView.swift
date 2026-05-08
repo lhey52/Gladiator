@@ -48,12 +48,23 @@ struct DashboardView: View {
             }
             .navigationBarHidden(true)
             .onAppear {
+                // Snapshot Sendable inputs on the main actor (we are
+                // here), then compute the greeting in a detached task
+                // so the SwiftData @Model array (`sessions`) doesn't
+                // cross the actor boundary. DashboardMessages only
+                // reads `session.date`, so the snapshot is just dates.
+                let dates = sessions.map(\.date)
                 let profile = DashboardMessages.DriverProfile(
                     firstName: firstName,
                     teamName: teamName,
                     racingNumber: racingNumber
                 )
-                greeting = DashboardMessages.generate(sessions: sessions, profile: profile)
+                Task {
+                    let computed = await Task.detached(priority: .userInitiated) {
+                        DashboardMessages.generate(sessionDates: dates, profile: profile)
+                    }.value
+                    greeting = computed
+                }
                 Task { await NewsService.shared.refresh() }
             }
         }

@@ -19,12 +19,34 @@ struct AnalyticsView: View {
 
     @State private var insightIndex: Int = 0
     @State private var showingPaywall: Bool = false
+    // Cached insights produced by the .task(id:) below. Was previously
+    // a computed property that re-ran the full 5-scanner pipeline on
+    // every body re-evaluation (insights is read 9+ times per render),
+    // making the Analytics tab unusable once 40 sessions are loaded.
+    @State private var insights: [AIInsight] = []
 
-    private var insights: [AIInsight] {
-        AIInsightsEngine.generate(
-            sessions: sessions,
-            tracks: tracks,
-            fields: fields,
+    // Drives `.task(id:)`. When any of these change we rebuild the
+    // snapshot off-main and recompute insights. We don't hash every
+    // FieldValue — that would defeat the perf win — but we do touch
+    // the per-session fieldValue counts so adding/removing values
+    // invalidates the cache. Rare in-place edits of an existing
+    // FieldValue's text won't refresh insights until something else
+    // changes; this is the documented behavioral tradeoff agreed on
+    // before this refactor.
+    private struct InsightsFingerprint: Hashable {
+        let sessionCount: Int
+        let fieldCount: Int
+        let valueCount: Int
+        let latestCreatedAt: Date?
+        let maxInsights: Int
+    }
+
+    private var insightsFingerprint: InsightsFingerprint {
+        InsightsFingerprint(
+            sessionCount: sessions.count,
+            fieldCount: fields.count,
+            valueCount: sessions.reduce(0) { $0 + $1.fieldValues.count },
+            latestCreatedAt: sessions.map(\.createdAt).max(),
             maxInsights: insightThreshold
         )
     }
@@ -161,6 +183,25 @@ struct AnalyticsView: View {
             }
             .fullScreenCover(isPresented: $showingPaywall) {
                 PaywallView()
+            }
+            .task(id: insightsFingerprint) {
+                // Snapshot on the main actor (we're already here —
+                // `.task` inherits the View's @MainActor context), then
+                // hand the Sendable snapshot to a detached task so the
+                // 5-scanner pipeline runs off main. Cancellation is
+                // checked before assigning so a fingerprint change
+                // mid-flight doesn't write a stale result.
+                let snapshot = AnalyticsSnapshot(sessions: sessions, fields: fields)
+                let threshold = insightThreshold
+                let computed = await Task.detached(priority: .userInitiated) {
+                    AIInsightsEngine.generate(snapshot: snapshot, maxInsights: threshold)
+                }.value
+                if !Task.isCancelled {
+                    insights = computed
+                    if insightIndex >= computed.count {
+                        insightIndex = max(0, computed.count - 1)
+                    }
+                }
             }
         }
     }

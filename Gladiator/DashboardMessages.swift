@@ -10,12 +10,12 @@ enum DashboardMessages {
     // MARK: - Context message definitions (evaluated in priority order)
 
     private struct ContextMessage {
-        let condition: ([Session], DriverProfile) -> Bool
+        let condition: ([Date], DriverProfile) -> Bool
         let probability: Double
         let message: (DriverProfile) -> String
     }
 
-    struct DriverProfile {
+    struct DriverProfile: Sendable {
         let firstName: String
         let teamName: String
         let racingNumber: String
@@ -27,26 +27,26 @@ enum DashboardMessages {
 
     private static let contextMessages: [ContextMessage] = [
         ContextMessage(
-            condition: { sessions, _ in
-                guard let latest = sessions.max(by: { $0.date < $1.date }) else { return false }
-                return Calendar.current.isDateInToday(latest.date)
+            condition: { dates, _ in
+                guard let latest = dates.max() else { return false }
+                return Calendar.current.isDateInToday(latest)
             },
             probability: 1.0,
             message: { profile in "Strong work today, \(profile.displayName)" }
         ),
         ContextMessage(
-            condition: { sessions, _ in
-                guard let latest = sessions.max(by: { $0.date < $1.date }) else { return true }
-                let days = Calendar.current.dateComponents([.day], from: latest.date, to: .now).day ?? 0
+            condition: { dates, _ in
+                guard let latest = dates.max() else { return true }
+                let days = Calendar.current.dateComponents([.day], from: latest, to: .now).day ?? 0
                 return days >= 30
             },
             probability: 1.0,
             message: { profile in "The track is waiting, \(profile.displayName)" }
         ),
         ContextMessage(
-            condition: { sessions, _ in
-                guard let latest = sessions.max(by: { $0.date < $1.date }) else { return false }
-                let days = Calendar.current.dateComponents([.day], from: latest.date, to: .now).day ?? 0
+            condition: { dates, _ in
+                guard let latest = dates.max() else { return false }
+                let days = Calendar.current.dateComponents([.day], from: latest, to: .now).day ?? 0
                 return days >= 7
             },
             probability: 1.0,
@@ -82,9 +82,13 @@ enum DashboardMessages {
 
     // MARK: - Generate greeting
 
-    static func generate(sessions: [Session], profile: DriverProfile) -> String {
+    // Takes Sendable inputs ([Date] + DriverProfile) so the caller can
+    // hand them to a detached task. Previously took [Session] (a
+    // SwiftData @Model class, not Sendable) — but only `session.date`
+    // was ever read, so the snapshot is just the dates.
+    static func generate(sessionDates: [Date], profile: DriverProfile) -> String {
         for ctx in contextMessages {
-            guard ctx.condition(sessions, profile) else { continue }
+            guard ctx.condition(sessionDates, profile) else { continue }
             if ctx.probability >= 1.0 || Double.random(in: 0..<1) < ctx.probability {
                 return ctx.message(profile)
             }

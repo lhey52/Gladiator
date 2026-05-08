@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct AIInsight: Identifiable {
+struct AIInsight: Identifiable, Sendable {
     let id = UUID()
     let priority: Int
     let message: String
@@ -55,14 +55,17 @@ enum AIInsightsEngine {
         }
     }
 
-    // MARK: - Generate insights
+    // MARK: - Generate insights (snapshot path — Sendable, off-main safe)
 
-    static func generate(
-        sessions: [Session],
-        tracks: [Track],
-        fields: [CustomField] = [],
-        maxInsights: Int = 5
-    ) -> [AIInsight] {
+    // Primary entry point. The whole pipeline (5 scanners + grouping
+    // passes + personal-best calcs) runs on whatever actor the caller
+    // invokes us from — typically a `Task.detached` launched from a
+    // SwiftUI `.task(id:)`. Inputs are plain value types, no SwiftData
+    // touchpoints. Reads `UserDefaults` (predictor nudge) which is
+    // thread-safe.
+    static func generate(snapshot: AnalyticsSnapshot, maxInsights: Int = 5) -> [AIInsight] {
+        let sessions = snapshot.sessions
+        let fields = snapshot.fields
         var insights: [AIInsight] = []
 
         if let insight = lowSessionComboInsight(sessions: sessions) {
@@ -83,9 +86,26 @@ enum AIInsightsEngine {
         return Array(insights.prefix(max(1, maxInsights)))
     }
 
+    // Legacy entry point. Snapshots on the main actor and forwards.
+    // Kept so any straggling callers (or future ones added without
+    // realizing snapshots exist) still work, but new code should
+    // reach for `generate(snapshot:)` and snapshot up-front so the
+    // calc can move off main.
+    @MainActor
+    static func generate(
+        sessions: [Session],
+        tracks: [Track],
+        fields: [CustomField] = [],
+        maxInsights: Int = 5
+    ) -> [AIInsight] {
+        _ = tracks // Unused; preserved for API back-compat.
+        let snapshot = AnalyticsSnapshot(sessions: sessions, fields: fields)
+        return generate(snapshot: snapshot, maxInsights: maxInsights)
+    }
+
     // MARK: - Insight: Combos with fewer than N sessions
 
-    private static func lowSessionComboInsight(sessions: [Session]) -> AIInsight? {
+    private static func lowSessionComboInsight(sessions: [SessionSnapshot]) -> AIInsight? {
         let grouped = Dictionary(grouping: sessions) { ComboKey(track: $0.trackName, vehicle: $0.vehicleName) }
         let lowCombos = grouped.filter { key, group in
             !key.track.isEmpty && group.count > 0 && group.count < minSessionsPerCombo
@@ -100,7 +120,7 @@ enum AIInsightsEngine {
 
     // MARK: - Insight: Combos with no new session in N days
 
-    private static func staleComboInsight(sessions: [Session]) -> AIInsight? {
+    private static func staleComboInsight(sessions: [SessionSnapshot]) -> AIInsight? {
         let cutoff = Calendar.current.date(byAdding: .day, value: -staleDaysThreshold, to: .now) ?? .now
         let grouped = Dictionary(grouping: sessions) { ComboKey(track: $0.trackName, vehicle: $0.vehicleName) }
         let staleCombos = grouped.filter { key, group in
@@ -118,8 +138,8 @@ enum AIInsightsEngine {
 
     // MARK: - Insight: New personal best (lowest, per combo)
 
-    private static func personalBestLowInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
-        let plottable = fields.filter { $0.fieldType.isPlottable }
+    private static func personalBestLowInsights(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [AIInsight] {
+        let plottable = fields.filter(\.isPlottable)
         guard !plottable.isEmpty else { return [] }
 
         let grouped = Dictionary(grouping: sessions) { ComboKey(track: $0.trackName, vehicle: $0.vehicleName) }
@@ -128,16 +148,14 @@ enum AIInsightsEngine {
         for (key, comboSessions) in grouped {
             guard !key.track.isEmpty, comboSessions.count >= 2 else { continue }
             guard let latest = comboSessions.max(by: { $0.createdAt < $1.createdAt }) else { continue }
-            let others = comboSessions.filter { $0.persistentModelID != latest.persistentModelID }
+            let others = comboSessions.filter { $0.id != latest.id }
             guard !others.isEmpty else { continue }
 
             for field in plottable {
-                guard let latestFV = latest.fieldValues.first(where: { $0.fieldName == field.name }),
-                      let latestVal = Double(latestFV.value) else { continue }
+                guard let latestVal = latest.fieldValues[field.name]?.doubleValue else { continue }
 
                 let previousValues = others.compactMap { session -> Double? in
-                    guard let fv = session.fieldValues.first(where: { $0.fieldName == field.name }) else { return nil }
-                    return Double(fv.value)
+                    session.fieldValues[field.name]?.doubleValue
                 }
                 guard !previousValues.isEmpty else { continue }
                 guard let previousMin = previousValues.min(), latestVal < previousMin else { continue }
@@ -157,8 +175,8 @@ enum AIInsightsEngine {
 
     // MARK: - Insight: New personal best (highest, per combo)
 
-    private static func personalBestHighInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
-        let plottable = fields.filter { $0.fieldType.isPlottable }
+    private static func personalBestHighInsights(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [AIInsight] {
+        let plottable = fields.filter(\.isPlottable)
         guard !plottable.isEmpty else { return [] }
 
         let grouped = Dictionary(grouping: sessions) { ComboKey(track: $0.trackName, vehicle: $0.vehicleName) }
@@ -167,16 +185,14 @@ enum AIInsightsEngine {
         for (key, comboSessions) in grouped {
             guard !key.track.isEmpty, comboSessions.count >= 2 else { continue }
             guard let latest = comboSessions.max(by: { $0.createdAt < $1.createdAt }) else { continue }
-            let others = comboSessions.filter { $0.persistentModelID != latest.persistentModelID }
+            let others = comboSessions.filter { $0.id != latest.id }
             guard !others.isEmpty else { continue }
 
             for field in plottable {
-                guard let latestFV = latest.fieldValues.first(where: { $0.fieldName == field.name }),
-                      let latestVal = Double(latestFV.value) else { continue }
+                guard let latestVal = latest.fieldValues[field.name]?.doubleValue else { continue }
 
                 let previousValues = others.compactMap { session -> Double? in
-                    guard let fv = session.fieldValues.first(where: { $0.fieldName == field.name }) else { return nil }
-                    return Double(fv.value)
+                    session.fieldValues[field.name]?.doubleValue
                 }
                 guard !previousValues.isEmpty else { continue }
                 guard let previousMax = previousValues.max(), latestVal > previousMax else { continue }
@@ -203,7 +219,7 @@ enum AIInsightsEngine {
 
     // MARK: - Insight: Background correlation scan
 
-    private static func correlationInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
+    private static func correlationInsights(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [AIInsight] {
         let pairs = BackgroundCorrelationScanner.scanAll(sessions: sessions, fields: fields)
         let sorted = pairs.sorted { abs($0.r) > abs($1.r) }
 
@@ -241,7 +257,7 @@ enum AIInsightsEngine {
 
     // MARK: - Insight: Background trend scan
 
-    private static func trendInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
+    private static func trendInsights(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [AIInsight] {
         let trends = BackgroundTrendScanner.scanAll(sessions: sessions, fields: fields)
 
         let declining = trends.filter { $0.classification == .declining }
@@ -279,7 +295,7 @@ enum AIInsightsEngine {
 
     // MARK: - Insight: Background consistency scan
 
-    private static func consistencyInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
+    private static func consistencyInsights(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [AIInsight] {
         let results = BackgroundConsistencyScanner.scanAll(sessions: sessions, fields: fields)
         guard !results.isEmpty else { return [] }
 
@@ -310,7 +326,7 @@ enum AIInsightsEngine {
 
     // MARK: - Insight: Background data quality scan
 
-    private static func dataGapInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
+    private static func dataGapInsights(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [AIInsight] {
         let results = BackgroundDataQualityScanner.scanAll(sessions: sessions, fields: fields)
         var insights: [AIInsight] = []
 
@@ -329,7 +345,7 @@ enum AIInsightsEngine {
 
     // MARK: - Insight: Performance Predictor nudge
 
-    private static func predictorNudgeInsights(sessions: [Session], fields: [CustomField]) -> [AIInsight] {
+    private static func predictorNudgeInsights(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [AIInsight] {
         guard !UserDefaults.standard.bool(forKey: predictorOpenedKey) else { return [] }
 
         let results = BackgroundPredictorReadinessScanner.scanAll(sessions: sessions, fields: fields)

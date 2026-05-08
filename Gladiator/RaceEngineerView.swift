@@ -665,7 +665,7 @@ struct RaceEngineerView: View {
         // raw extraction has to happen here. Everything downstream operates
         // on the resulting Sendable snapshots and runs on a background
         // executor.
-        let snapshots: [SessionSnapshot] = sessions.map { session in
+        let snapshots: [RaceEngineerSnapshot] = sessions.map { session in
             var values: [String: Double] = [:]
             for fv in session.fieldValues where plottableNames.contains(fv.fieldName) {
                 let raw = fv.value.trimmingCharacters(in: .whitespaces)
@@ -673,7 +673,7 @@ struct RaceEngineerView: View {
                 if fv.fieldType == .time, val == 0 { continue }
                 values[fv.fieldName] = val
             }
-            return SessionSnapshot(
+            return RaceEngineerSnapshot(
                 trackName: session.trackName,
                 vehicleName: session.vehicleName,
                 date: session.date,
@@ -755,7 +755,7 @@ private enum DirectionState {
     case up, down, none
 }
 
-private struct SessionSnapshot: Sendable {
+private struct RaceEngineerSnapshot: Sendable {
     let trackName: String
     let vehicleName: String
     let date: Date
@@ -771,7 +771,7 @@ private struct FilterCriteria: Sendable {
     let startDate: Date?
     let endDate: Date?
 
-    func matches(_ snap: SessionSnapshot) -> Bool {
+    func matches(_ snap: RaceEngineerSnapshot) -> Bool {
         if !selectedTracks.isEmpty, !selectedTracks.contains(snap.trackName) { return false }
         if !selectedVehicles.isEmpty, !selectedVehicles.contains(snap.vehicleName) { return false }
         if let start = startDate, snap.date < start { return false }
@@ -796,11 +796,11 @@ private struct AnalysisCache: Sendable {
     let outcomeFieldType: FieldType
     let fieldNames: [String]
     let fieldTypes: [String: FieldType]
-    let sortedSnapshots: [SessionSnapshot]
+    let sortedSnapshots: [RaceEngineerSnapshot]
     let fieldRanges: [String: FieldRange]
 
     static func compute(
-        snapshots: [SessionSnapshot],
+        snapshots: [RaceEngineerSnapshot],
         filter: FilterCriteria,
         outcome: String,
         outcomeFieldType: FieldType,
@@ -848,7 +848,7 @@ private struct PanelCache: Sendable {
         let leftSlice = Array(analysis.sortedSnapshots.prefix(split))
         let rightSlice = Array(analysis.sortedSnapshots.suffix(total - split))
 
-        func avg(_ slice: [SessionSnapshot], for name: String) -> Double? {
+        func avg(_ slice: [RaceEngineerSnapshot], for name: String) -> Double? {
             let vals = slice.compactMap { $0.numericValues[name] }
             guard !vals.isEmpty else { return nil }
             return vals.reduce(0, +) / Double(vals.count)

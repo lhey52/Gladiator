@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct DataQualityResult: Identifiable {
+struct DataQualityResult: Identifiable, Sendable {
     let id = UUID()
     let trackName: String
     let vehicleName: String
@@ -24,7 +24,7 @@ enum BackgroundDataQualityScanner {
         let vehicle: String
     }
 
-    static func scanAll(sessions: [Session], fields: [CustomField]) -> [DataQualityResult] {
+    static func scanAll(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [DataQualityResult] {
         guard !fields.isEmpty else { return [] }
 
         let grouped = Dictionary(grouping: sessions) { GroupKey(track: $0.trackName, vehicle: $0.vehicleName) }
@@ -35,13 +35,18 @@ enum BackgroundDataQualityScanner {
             let total = groupSessions.count
             guard total >= minimumSessions else { continue }
 
+            // Old code re-scanned every session's fieldValues for every
+            // field via a `.contains { ... }.count` filter — O(sessions
+            // × fields × fieldValues_per_session). With dict-backed
+            // snapshots we drop straight to O(sessions × fields) using
+            // a single dict lookup per (session, field).
             for field in fields {
-                let recorded = groupSessions.filter { session in
-                    session.fieldValues.contains { fv in
-                        fv.fieldName == field.name &&
-                        !fv.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                var recorded = 0
+                for session in groupSessions {
+                    if session.fieldValues[field.name]?.hasNonEmptyValue == true {
+                        recorded += 1
                     }
-                }.count
+                }
                 let missing = total - recorded
                 let missingPercent = Double(missing) / Double(total)
                 results.append(DataQualityResult(

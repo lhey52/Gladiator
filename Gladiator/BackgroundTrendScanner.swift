@@ -5,14 +5,14 @@
 
 import Foundation
 
-enum TrendClassification {
+enum TrendClassification: Sendable {
     case improving
     case declining
     case stable
     case plateau
 }
 
-struct TrendScanResult: Identifiable {
+struct TrendScanResult: Identifiable, Sendable {
     let id = UUID()
     let trackName: String
     let vehicleName: String
@@ -33,8 +33,8 @@ enum BackgroundTrendScanner {
         let vehicle: String
     }
 
-    static func scanAll(sessions: [Session], fields: [CustomField]) -> [TrendScanResult] {
-        let plottable = fields.filter { $0.fieldType.isPlottable }
+    static func scanAll(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [TrendScanResult] {
+        let plottable = fields.filter(\.isPlottable)
         guard !plottable.isEmpty else { return [] }
 
         let grouped = Dictionary(grouping: sessions) { GroupKey(track: $0.trackName, vehicle: $0.vehicleName) }
@@ -60,10 +60,10 @@ enum BackgroundTrendScanner {
         return results
     }
 
-    private static func analyze(trackName: String, vehicleName: String, sessions: [Session], fieldName: String, fieldType: FieldType) -> TrendScanResult? {
+    private static func analyze(trackName: String, vehicleName: String, sessions: [SessionSnapshot], fieldName: String, fieldType: FieldType) -> TrendScanResult? {
         let values: [Double] = sessions.compactMap { session in
-            guard let fv = session.fieldValues.first(where: { $0.fieldName == fieldName }) else { return nil }
-            return Double(fv.value)
+            // O(1) dict lookup replacing session.fieldValues.first(where:).
+            session.fieldValues[fieldName]?.doubleValue
         }
         guard values.count >= minimumSessions else { return nil }
 

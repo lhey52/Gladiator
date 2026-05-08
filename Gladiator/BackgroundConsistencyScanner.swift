@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct ConsistencyResult: Identifiable {
+struct ConsistencyResult: Identifiable, Sendable {
     let id = UUID()
     let trackName: String
     let vehicleName: String
@@ -26,8 +26,8 @@ enum BackgroundConsistencyScanner {
         let vehicle: String
     }
 
-    static func scanAll(sessions: [Session], fields: [CustomField]) -> [ConsistencyResult] {
-        let plottable = fields.filter { $0.fieldType.isPlottable }
+    static func scanAll(sessions: [SessionSnapshot], fields: [CustomFieldSnapshot]) -> [ConsistencyResult] {
+        let plottable = fields.filter(\.isPlottable)
         guard !plottable.isEmpty else { return [] }
 
         let grouped = Dictionary(grouping: sessions) { GroupKey(track: $0.trackName, vehicle: $0.vehicleName) }
@@ -54,13 +54,13 @@ enum BackgroundConsistencyScanner {
     private static func analyze(
         trackName: String,
         vehicleName: String,
-        sessions: [Session],
+        sessions: [SessionSnapshot],
         fieldName: String,
         fieldType: FieldType
     ) -> ConsistencyResult? {
         let values: [Double] = sessions.compactMap { session in
-            guard let fv = session.fieldValues.first(where: { $0.fieldName == fieldName }) else { return nil }
-            return Double(fv.value)
+            // O(1) dict lookup.
+            session.fieldValues[fieldName]?.doubleValue
         }
 
         guard values.count >= minimumSessions else { return nil }

@@ -35,6 +35,27 @@ final class AnalyticsFilterState {
         }
     }
 
+    // Snapshot overload — used when analytics work runs against the
+    // value-type AnalyticsSnapshot graph so the calc can move off the
+    // main actor without touching SwiftData.
+    func apply(toSnapshots sessions: [SessionSnapshot]) -> [SessionSnapshot] {
+        sessions.filter { session in
+            if !selectedTracks.isEmpty, !selectedTracks.contains(session.trackName) {
+                return false
+            }
+            if !selectedVehicles.isEmpty, !selectedVehicles.contains(session.vehicleName) {
+                return false
+            }
+            if let start = startDate, session.date < start {
+                return false
+            }
+            if let end = endDate, session.date > Calendar.current.date(byAdding: .day, value: 1, to: end) ?? end {
+                return false
+            }
+            return true
+        }
+    }
+
     func reset() {
         selectedTracks.removeAll()
         selectedVehicles.removeAll()
