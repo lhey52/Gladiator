@@ -16,4 +16,6 @@ enum AppConfig {
     static let isPerformancePredictorEnabled = false
     static let isRaceEngineerEnabled = true
     static let isRaceEngineerV2Enabled = false
+    static let isPitGoalsEnabled = false
+    static let isPitRemindersEnabled = false
 }

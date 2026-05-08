@@ -35,18 +35,22 @@ struct PitView: View {
                             summary: summary(count: notes.count, singular: "note", plural: "notes"),
                             destination: PitNotesView()
                         )
-                        card(
-                            title: "Goals",
-                            icon: "flag.2.crossed.fill",
-                            summary: summary(count: goals.count, singular: "goal", plural: "goals"),
-                            destination: PitGoalsView()
-                        )
-                        card(
-                            title: "Reminders",
-                            icon: "bell.badge.fill",
-                            summary: summary(count: activeReminderCount, singular: "reminder", plural: "reminders"),
-                            destination: PitRemindersView()
-                        )
+                        if AppConfig.isPitGoalsEnabled {
+                            card(
+                                title: "Goals",
+                                icon: "flag.2.crossed.fill",
+                                summary: summary(count: goals.count, singular: "goal", plural: "goals"),
+                                destination: PitGoalsView()
+                            )
+                        }
+                        if AppConfig.isPitRemindersEnabled {
+                            card(
+                                title: "Reminders",
+                                icon: "bell.badge.fill",
+                                summary: summary(count: activeReminderCount, singular: "reminder", plural: "reminders"),
+                                destination: PitRemindersView()
+                            )
+                        }
                         comingSoonCard(
                             title: "Track Map and Affiliates",
                             icon: "map.fill",
