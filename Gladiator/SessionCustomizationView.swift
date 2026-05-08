@@ -14,14 +14,16 @@ struct SessionCustomizationView: View {
 
             List {
                 Section {
-                    NavigationLink(destination: CustomFieldsView()) {
-                        Text("Metrics")
-                            .font(.system(size: 15, weight: .heavy))
-                            .foregroundColor(Theme.textPrimary)
-                            .padding(.vertical, 4)
+                    if AppConfig.isSessionMetricsEnabled {
+                        NavigationLink(destination: CustomFieldsView()) {
+                            Text("Metrics")
+                                .font(.system(size: 15, weight: .heavy))
+                                .foregroundColor(Theme.textPrimary)
+                                .padding(.vertical, 4)
+                        }
+                        .listRowBackground(Theme.surface)
+                        .listRowSeparatorTint(Theme.hairline)
                     }
-                    .listRowBackground(Theme.surface)
-                    .listRowSeparatorTint(Theme.hairline)
 
                     NavigationLink(destination: TracksView()) {
                         Text("Tracks")
@@ -40,6 +42,17 @@ struct SessionCustomizationView: View {
                     }
                     .listRowBackground(Theme.surface)
                     .listRowSeparatorTint(Theme.hairline)
+
+                    if AppConfig.isZoneSetupEnabled {
+                        NavigationLink(destination: SetupZonesView()) {
+                            Text("Setup Zones")
+                                .font(.system(size: 15, weight: .heavy))
+                                .foregroundColor(Theme.textPrimary)
+                                .padding(.vertical, 4)
+                        }
+                        .listRowBackground(Theme.surface)
+                        .listRowSeparatorTint(Theme.hairline)
+                    }
                 } header: {
                     sectionHeader("Data")
                 }
@@ -55,14 +68,16 @@ struct SessionCustomizationView: View {
                     .listRowBackground(Theme.surface)
                     .listRowSeparatorTint(Theme.hairline)
 
-                    NavigationLink(destination: VehicleStyleView()) {
-                        Text("Vehicle Style")
-                            .font(.system(size: 15, weight: .heavy))
-                            .foregroundColor(Theme.textPrimary)
-                            .padding(.vertical, 4)
+                    if AppConfig.isVehicleStyleEnabled {
+                        NavigationLink(destination: VehicleStyleView()) {
+                            Text("Vehicle Style")
+                                .font(.system(size: 15, weight: .heavy))
+                                .foregroundColor(Theme.textPrimary)
+                                .padding(.vertical, 4)
+                        }
+                        .listRowBackground(Theme.surface)
+                        .listRowSeparatorTint(Theme.hairline)
                     }
-                    .listRowBackground(Theme.surface)
-                    .listRowSeparatorTint(Theme.hairline)
                 } header: {
                     sectionHeader("Appearance")
                 }

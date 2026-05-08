@@ -12,33 +12,64 @@ struct DemoSeederAdminView: View {
     @State private var pendingSeeder: SeederOption?
     @State private var showingConfirmation: Bool = false
     @State private var showingSuccess: Bool = false
+    @State private var successMessage: String = ""
 
     private enum SeederOption: String, Identifiable {
         case demo1
-        case demo2
+        case defaultMetrics
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .demo1: return "Demo 1"
-            case .demo2: return "Demo 2"
+            case .defaultMetrics: return "Load Default Metrics"
             }
         }
 
         var icon: String {
             switch self {
             case .demo1: return "1.circle.fill"
-            case .demo2: return "2.circle.fill"
+            case .defaultMetrics: return "list.bullet.rectangle.fill"
             }
         }
 
         var subtitle: String {
             switch self {
             case .demo1:
-                return "Populates basic sessions, metrics and tracks to demonstrate core app functionality."
-            case .demo2:
-                return "Populates tire pressure and race time data across 5 sessions to showcase the Performance Predictor tool."
+                return "Loads default metrics, then seeds 40 sessions at Seekonk Speedway with Vehicle One — full late-model data across tires, chassis, and race results."
+            case .defaultMetrics:
+                return "Loads the standard preloaded metrics for tire, chassis and general zones."
+            }
+        }
+
+        var confirmationTitle: String {
+            switch self {
+            case .demo1: return "Seed Demo Data"
+            case .defaultMetrics: return "Load Default Metrics"
+            }
+        }
+
+        var confirmationMessage: String {
+            switch self {
+            case .demo1:
+                return "This will add demo data to your app. Existing data will not be removed. Continue?"
+            case .defaultMetrics:
+                return "This will add the default metrics to your app. Existing metrics with the same name and zone will be skipped. Continue?"
+            }
+        }
+
+        var confirmButtonText: String {
+            switch self {
+            case .demo1: return "Seed"
+            case .defaultMetrics: return "Load"
+            }
+        }
+
+        var successMessage: String {
+            switch self {
+            case .demo1: return "Demo data seeded successfully"
+            case .defaultMetrics: return "Default metrics loaded successfully"
             }
         }
     }
@@ -51,7 +82,7 @@ struct DemoSeederAdminView: View {
                 VStack(spacing: 14) {
                     header
                     seederButton(.demo1)
-                    seederButton(.demo2)
+                    seederButton(.defaultMetrics)
                 }
                 .padding(20)
             }
@@ -59,20 +90,20 @@ struct DemoSeederAdminView: View {
         .navigationTitle("Demo Seeder")
         .navigationBarTitleDisplayMode(.inline)
         .alert(
-            "Seed Demo Data",
+            pendingSeeder?.confirmationTitle ?? "",
             isPresented: $showingConfirmation,
             presenting: pendingSeeder
         ) { seeder in
             Button("Cancel", role: .cancel) {
                 pendingSeeder = nil
             }
-            Button("Seed") {
+            Button(seeder.confirmButtonText) {
                 runSeeder(seeder)
             }
-        } message: { _ in
-            Text("This will add demo data to your app. Existing data will not be removed. Continue?")
+        } message: { seeder in
+            Text(seeder.confirmationMessage)
         }
-        .alert("Demo data seeded successfully", isPresented: $showingSuccess) {
+        .alert(successMessage, isPresented: $showingSuccess) {
             Button("OK", role: .cancel) { }
         }
     }
@@ -142,10 +173,11 @@ struct DemoSeederAdminView: View {
     private func runSeeder(_ seeder: SeederOption) {
         switch seeder {
         case .demo1:
-            DemoDataSeeder.seed(into: modelContext)
-        case .demo2:
-            DemoDataSeeder.seedDemo2(into: modelContext)
+            DemoDataSeeder.seedDemo1(into: modelContext)
+        case .defaultMetrics:
+            DefaultMetricsLoader.load(into: modelContext)
         }
+        successMessage = seeder.successMessage
         pendingSeeder = nil
         showingSuccess = true
     }

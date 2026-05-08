@@ -97,6 +97,7 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: isShowingTutorial)
         .onAppear {
+            DefaultMetricsLoader.loadIfNeeded(into: modelContext)
             if !hasSeenTutorial && !isShowingTutorial {
                 isShowingTutorial = true
             }

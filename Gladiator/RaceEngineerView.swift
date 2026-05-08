@@ -31,7 +31,18 @@ struct RaceEngineerView: View {
     @ObservedObject private var iap = IAPManager.shared
 
     private var plottableFields: [CustomField] {
-        allFields.filter { $0.fieldType.isPlottable }
+        // Time metrics float to the top of the outcome picker — the
+        // typical Race Engineer comparison is "what changed when lap
+        // time moved", so surfacing those first saves a scroll. Falls
+        // back to CustomField.sortOrder within each group.
+        allFields
+            .filter { $0.fieldType.isPlottable }
+            .sorted { a, b in
+                if (a.fieldType == .time) != (b.fieldType == .time) {
+                    return a.fieldType == .time
+                }
+                return a.sortOrder < b.sortOrder
+            }
     }
 
     private var canAnalyze: Bool {

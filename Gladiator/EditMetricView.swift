@@ -89,7 +89,11 @@ struct EditMetricView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
-            let parts = CustomField.split(name: field.name)
+            // Strip the zone prefix off the stored name before splitting
+            // so the form's Name field shows the editable bare name
+            // ("Cold Tire Pressure") instead of "FL Cold Tire Pressure".
+            let stripped = CustomField.stripPrefix(from: field.name, zone: field.zone)
+            let parts = CustomField.split(name: stripped)
             name = parts.name
             unit = parts.unit
             fieldType = field.fieldType
@@ -309,11 +313,16 @@ struct EditMetricView: View {
     }
 
     private func performSave() {
+        let combinedName: String
         if fieldType == .number {
-            field.name = CustomField.combine(name: name, unit: unit)
+            combinedName = CustomField.combine(name: name, unit: unit)
         } else {
-            field.name = name.trimmingCharacters(in: .whitespaces)
+            combinedName = name.trimmingCharacters(in: .whitespaces)
         }
+        // Re-apply the zone prefix on save. Picking a different zone in
+        // the form swaps the prefix automatically because applyPrefix
+        // is keyed off the new zone.
+        field.name = CustomField.applyPrefix(to: combinedName, zone: zone)
         field.fieldType = fieldType
         // Step size is meaningless for Text/Time metrics; clear it on type
         // change so stale values don't linger after a metric is reclassified.

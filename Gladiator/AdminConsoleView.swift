@@ -41,6 +41,17 @@ struct AdminConsoleView: View {
                     .buttonStyle(.plain)
 
                     NavigationLink {
+                        FeatureFlagsAdminView()
+                    } label: {
+                        consoleCard(
+                            title: "Feature Flags",
+                            icon: "flag.2.crossed.fill",
+                            subtitle: "Toggle gated tools, session-customization rows, and Pit features without rebuilding the app."
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    NavigationLink {
                         ResetsAdminView()
                     } label: {
                         consoleCard(

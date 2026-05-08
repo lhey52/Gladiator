@@ -148,7 +148,11 @@ private struct ZoneMetricRow: View {
     }
 
     private var parts: (name: String, unit: String) {
-        CustomField.split(name: field.name)
+        // Strip the zone prefix before splitting so a metric saved as
+        // "FL Cold Tire Pressure (PSI)" reads as "Cold Tire Pressure"
+        // inside the FL Tire sheet. General fields are unchanged.
+        let stripped = CustomField.stripPrefix(from: field.name, zone: field.zone)
+        return CustomField.split(name: stripped)
     }
 
     var body: some View {

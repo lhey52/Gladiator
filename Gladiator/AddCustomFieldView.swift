@@ -304,9 +304,10 @@ struct AddCustomFieldView: View {
         } else {
             combinedName = name.trimmingCharacters(in: .whitespaces)
         }
+        let prefixedName = CustomField.applyPrefix(to: combinedName, zone: zone)
         let resolvedStepSize: Double? = fieldType == .number ? parsedStepSize : nil
         let field = CustomField(
-            name: combinedName,
+            name: prefixedName,
             fieldType: fieldType,
             sortOrder: nextSortOrder,
             stepSize: resolvedStepSize,

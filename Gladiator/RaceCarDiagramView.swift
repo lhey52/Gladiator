@@ -21,13 +21,23 @@ struct RaceCarDiagramView: View {
     var style: VehicleStyle = .formula
     let onTapZone: (CarZone) -> Void
 
+    // Hidden via Settings → Session Customization → Setup Zones. The
+    // diagram simply skips disabled zones — their data, analytics, and
+    // tap routing elsewhere in the app are untouched.
+    @AppStorage("disabledSetupZones") private var disabledZonesRaw: String = "Engine"
+
+    private var visibleZones: [CarZone] {
+        let disabled = Set(disabledZonesRaw.split(separator: ",").map(String.init))
+        return CarZone.carZones.filter { !disabled.contains($0.rawValue) }
+    }
+
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
             ZStack {
                 blueprintLayer
 
-                ForEach(CarZone.carZones) { zone in
+                ForEach(visibleZones) { zone in
                     let layout = RaceCarDiagramView.layout(for: zone, style: style)
                     zoneCellView(for: zone)
                         .frame(
@@ -104,14 +114,14 @@ struct RaceCarDiagramView: View {
 
     // Tire positions vary per style — Formula keeps the open-wheel layout
     // at the canvas edges, Late Model tucks smaller wheels next to the
-    // body. Cockpit / engine swap front-to-back on Late Model so the
+    // body. Chassis / engine swap front-to-back on Late Model so the
     // engine sits at the front of the silhouette (where it lives on a
-    // stock car) and the cockpit sits behind it.
+    // stock car) and the chassis sits behind it.
     static func layout(for zone: CarZone, style: VehicleStyle = .formula) -> (center: CGPoint, size: CGSize) {
         switch zone {
         case .flTire, .frTire, .blTire, .brTire:
             return tireLayout(for: zone, style: style)
-        case .cockpit:
+        case .chassis:
             switch style {
             case .formula:
                 return (CGPoint(x: 0.50, y: 0.39), CGSize(width: 0.34, height: 0.17))
@@ -449,7 +459,7 @@ private struct ZoneCell: View {
     private var cornerRadius: CGFloat {
         switch zone {
         case .flTire, .frTire, .blTire, .brTire: return 6
-        case .cockpit: return 22
+        case .chassis: return 22
         case .engine: return 14
         case .general: return 6
         }
@@ -498,7 +508,7 @@ private struct ZoneCell: View {
                 .frTire: ZoneFillState(filled: 1, total: 2),
                 .blTire: ZoneFillState(filled: 0, total: 1),
                 .engine: ZoneFillState(filled: 3, total: 3),
-                .cockpit: ZoneFillState(filled: 1, total: 4)
+                .chassis: ZoneFillState(filled: 1, total: 4)
             ],
             onTapZone: { _ in }
         )

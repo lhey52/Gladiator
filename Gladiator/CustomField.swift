@@ -105,8 +105,34 @@ final class CustomField {
     }
 
     var zone: CarZone {
-        get { CarZone(rawValue: zoneRaw) ?? .general }
+        get {
+            // Legacy "Cockpit" rawValues map to .chassis after the
+            // 1.x rename so prior field assignments still resolve to
+            // a valid zone. New writes persist as "Chassis".
+            if zoneRaw == "Cockpit" { return .chassis }
+            return CarZone(rawValue: zoneRaw) ?? .general
+        }
         set { zoneRaw = newValue.rawValue }
+    }
+
+    // Prepend the zone's prefix to a name. Idempotent: skips if the name
+    // is already prefixed (so users who manually type "FL …" in the
+    // metric form don't end up with "FL FL …" on save). General returns
+    // the input unchanged because its prefix is empty.
+    static func applyPrefix(to name: String, zone: CarZone) -> String {
+        let prefix = zone.metricNamePrefix
+        guard !prefix.isEmpty else { return name }
+        if name.hasPrefix(prefix) { return name }
+        return prefix + name
+    }
+
+    // Inverse of applyPrefix — used when rendering a metric inside its
+    // own zone interface (the prefix is redundant there) and when
+    // pre-filling the Edit Metric form.
+    static func stripPrefix(from name: String, zone: CarZone) -> String {
+        let prefix = zone.metricNamePrefix
+        guard !prefix.isEmpty, name.hasPrefix(prefix) else { return name }
+        return String(name.dropFirst(prefix.count))
     }
 
     static func combine(name: String, unit: String) -> String {

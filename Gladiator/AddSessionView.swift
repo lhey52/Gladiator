@@ -34,10 +34,11 @@ struct AddSessionView: View {
 
     @AppStorage("sessionFormTipDismissed") private var tipDismissed: Bool = false
     @AppStorage("sessionProgressBarEnabled") private var progressBarEnabled: Bool = true
-    @AppStorage(VehicleStyle.storageKey) private var vehicleStyleRaw: String = VehicleStyle.formula.rawValue
+    @AppStorage(VehicleStyle.storageKey) private var vehicleStyleRaw: String = VehicleStyle.lateModel.rawValue
+    @AppStorage("disabledSetupZones") private var disabledZonesRaw: String = "Engine"
 
     private var vehicleStyle: VehicleStyle {
-        VehicleStyle(rawValue: vehicleStyleRaw) ?? .formula
+        VehicleStyle(rawValue: vehicleStyleRaw) ?? .lateModel
     }
     @State private var date: Date = .now
     @State private var trackName: String = ""
@@ -218,12 +219,19 @@ struct AddSessionView: View {
     // Walk-around-the-car order for prev/next navigation. Wraps in both
     // directions so users can keep stepping forward without thinking
     // about edges.
-    private static let zoneNavigationOrder: [CarZone] = [
-        .flTire, .frTire, .cockpit, .engine, .blTire, .brTire
+    private static let baseZoneNavigationOrder: [CarZone] = [
+        .flTire, .frTire, .chassis, .engine, .blTire, .brTire
     ]
 
+    // Skip zones the user has hidden in Settings → Setup Zones so the
+    // chevron walk only steps through visible zones on the diagram.
+    private var zoneNavigationOrder: [CarZone] {
+        let disabled = Set(disabledZonesRaw.split(separator: ",").map(String.init))
+        return Self.baseZoneNavigationOrder.filter { !disabled.contains($0.rawValue) }
+    }
+
     private func zoneNeighbor(of zone: CarZone, offset: Int) -> CarZone {
-        let order = Self.zoneNavigationOrder
+        let order = zoneNavigationOrder
         guard let idx = order.firstIndex(of: zone), !order.isEmpty else { return zone }
         let count = order.count
         let target = ((idx + offset) % count + count) % count
@@ -573,7 +581,13 @@ struct AddSessionView: View {
     }
 
     private func metricRow(field: CustomField) -> some View {
-        let parts = CustomField.split(name: field.name)
+        // Strip the zone prefix from the stored name before splitting so
+        // a metric that's saved as "FL Cold Tire Pressure (PSI)" reads
+        // as "Cold Tire Pressure" inside the FL Tire zone interface.
+        // General fields (no prefix) flow through unchanged.
+        let parts = CustomField.split(
+            name: CustomField.stripPrefix(from: field.name, zone: field.zone)
+        )
         return HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(parts.name.uppercased())

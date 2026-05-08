@@ -201,7 +201,7 @@ struct TrackCodeView: View {
         case .grantPro:
             iap.codeGrantedPro = true
         case .seedDemoData:
-            DemoDataSeeder.seed(into: modelContext)
+            DemoDataSeeder.seedDemo1(into: modelContext)
             showToastBriefly("Demo data loaded successfully")
         case .unlockAdminConsole:
             isAdminConsoleUnlocked = true

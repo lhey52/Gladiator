@@ -6,7 +6,7 @@
 import Foundation
 
 // User-selectable race car silhouette style for the Add / Edit Session
-// blueprint. The four tire zones, Cockpit, and Engine sit at the same
+// blueprint. The four tire zones, Chassis, and Engine sit at the same
 // relative positions across all three styles — only the chassis outline
 // changes — so existing zone interaction stays consistent regardless of
 // which style is picked.

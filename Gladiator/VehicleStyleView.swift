@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct VehicleStyleView: View {
-    @AppStorage(VehicleStyle.storageKey) private var styleRaw: String = VehicleStyle.formula.rawValue
+    @AppStorage(VehicleStyle.storageKey) private var styleRaw: String = VehicleStyle.lateModel.rawValue
 
     var body: some View {
         ZStack {
