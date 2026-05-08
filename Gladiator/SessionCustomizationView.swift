@@ -54,8 +54,17 @@ struct SessionCustomizationView: View {
                     .tint(Theme.accent)
                     .listRowBackground(Theme.surface)
                     .listRowSeparatorTint(Theme.hairline)
+
+                    NavigationLink(destination: VehicleStyleView()) {
+                        Text("Vehicle Style")
+                            .font(.system(size: 15, weight: .heavy))
+                            .foregroundColor(Theme.textPrimary)
+                            .padding(.vertical, 4)
+                    }
+                    .listRowBackground(Theme.surface)
+                    .listRowSeparatorTint(Theme.hairline)
                 } header: {
-                    sectionHeader("Form")
+                    sectionHeader("Appearance")
                 }
             }
             .listStyle(.plain)

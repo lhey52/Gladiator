@@ -24,6 +24,11 @@ struct EditSessionView: View {
 
     @AppStorage("sessionFormTipDismissed") private var tipDismissed: Bool = false
     @AppStorage("sessionProgressBarEnabled") private var progressBarEnabled: Bool = true
+    @AppStorage(VehicleStyle.storageKey) private var vehicleStyleRaw: String = VehicleStyle.formula.rawValue
+
+    private var vehicleStyle: VehicleStyle {
+        VehicleStyle(rawValue: vehicleStyleRaw) ?? .formula
+    }
     @State private var date: Date = .now
     @State private var trackName: String = ""
     @State private var vehicleName: String = ""
@@ -219,6 +224,7 @@ struct EditSessionView: View {
                 .padding(.bottom, 8)
             RaceCarDiagramView(
                 zoneStates: zoneStates,
+                style: vehicleStyle,
                 onTapZone: { zone in
                     focusedField = nil
                     activeZone = zone
