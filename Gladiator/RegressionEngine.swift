@@ -174,6 +174,23 @@ enum DataSufficiencyLevel {
     static func from(sampleSize: Int) -> DataSufficiencyLevel {
         from(sessionsPerPredictor: sampleSize)
     }
+
+    // Race Engineer's slider tool splits sessions into two groups and compares
+    // their averages. Reliability of that comparison is bounded by whichever
+    // side is smaller — a 32/8 split averages an 8-session bucket on one side,
+    // so 8 is what the sufficiency rating reflects. Tier thresholds are
+    // tighter than the predictor-based tools because each bucket here is
+    // already a subset of a single outcome metric, not a multi-predictor
+    // regression that needs more data per dimension.
+    static func from(smallerBucketSize: Int) -> DataSufficiencyLevel {
+        switch smallerBucketSize {
+        case ..<6: return .bad
+        case ..<11: return .poor
+        case ..<16: return .fair
+        case ..<25: return .good
+        default: return .excellent
+        }
+    }
 }
 
 enum PredictiveAnalysisOutcome {

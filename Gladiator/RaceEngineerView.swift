@@ -20,7 +20,6 @@ struct RaceEngineerView: View {
     @State private var sliderPosition: Double = 0.5
     @State private var showingPaywall: Bool = false
     @State private var isInitialLoading: Bool = true
-    @State private var showingDataSufficiencyDetail: Bool = false
 
     @State private var hasAnalyzed: Bool = false
     @State private var isAnalyzing: Bool = false
@@ -99,15 +98,6 @@ struct RaceEngineerView: View {
                     selected: outcome
                 ) { name in
                     setOutcome(name)
-                }
-            }
-            .sheet(isPresented: $showingDataSufficiencyDetail) {
-                if let analysis = analysisCache {
-                    RaceEngineerDataSufficiencyDetail(
-                        level: DataSufficiencyLevel.from(sampleSize: analysis.sortedSnapshots.count),
-                        sampleSize: analysis.sortedSnapshots.count,
-                        outcome: outcome
-                    )
                 }
             }
             .fullScreenCover(isPresented: $showingPaywall) {
@@ -309,7 +299,7 @@ struct RaceEngineerView: View {
     private func comparisonSection(analysis: AnalysisCache) -> some View {
         VStack(spacing: 14) {
             dataSufficiencyRow(analysis: analysis)
-            sliderCard
+            sliderCard(analysis: analysis)
             if let panel = panelCache {
                 HStack(alignment: .top, spacing: 10) {
                     comparisonPanel(side: .lower, analysis: analysis, panel: panel)
@@ -319,14 +309,15 @@ struct RaceEngineerView: View {
         }
     }
 
-    // Sample size = sessions with the chosen outcome value present, after
-    // the analytics filter is applied. Mirrors the way Correlation Analysis
-    // counts samples for its own DataSufficiencyLevel computation.
+    // Sufficiency is rated against the smaller of the two slider buckets —
+    // averages can only be as reliable as the side with fewer sessions, so
+    // an 8/32 split is bounded by the 8-session bucket regardless of how
+    // many sessions sit on the other side. Reading sliderPosition directly
+    // (rather than the debounced panel cache) keeps the badge live as the
+    // user drags.
     private func dataSufficiencyRow(analysis: AnalysisCache) -> some View {
-        let level = DataSufficiencyLevel.from(sampleSize: analysis.sortedSnapshots.count)
-        return Button {
-            showingDataSufficiencyDetail = true
-        } label: {
+        let level = DataSufficiencyLevel.from(smallerBucketSize: smallerBucketSize(for: analysis))
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Label("DATA SUFFICIENCY", systemImage: "square.stack.3d.up.fill")
                     .font(.system(size: 10, weight: .heavy))
@@ -334,37 +325,11 @@ struct RaceEngineerView: View {
                     .foregroundColor(Theme.accent)
                 Spacer()
                 DataSufficiencyBadge(level: level)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Theme.textTertiary)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Theme.hairline, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Slider card
-
-    private var sliderCard: some View {
-        // Outcome name remains as the slider's title — the live percentage
-        // and session-count labels now live in each panel's header instead.
-        VStack(spacing: 14) {
-            Text(outcome)
-                .font(.system(size: 16, weight: .heavy))
-                .foregroundColor(Theme.textPrimary)
-                .frame(maxWidth: .infinity)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-
-            sliderControl
+            Text(sufficiencyShortDescription(for: level))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -377,11 +342,117 @@ struct RaceEngineerView: View {
         )
     }
 
-    // Uniform grey track with 9 evenly spaced tick marks (every 10%) and a
-    // vertical pill thumb that protrudes past the top and bottom of the
-    // track. Drag updates feed `sliderPosition`, which the existing
-    // .onChange wires into the debounced panel refresh.
-    private var sliderControl: some View {
+    private func sufficiencyShortDescription(for level: DataSufficiencyLevel) -> String {
+        switch level {
+        case .bad: return "Too few sessions for a reliable comparison."
+        case .poor: return "Limited data — treat results as early indicators only."
+        case .fair: return "Comparison is directionally useful but expect some movement as more data accumulates."
+        case .good: return "Solid foundation — results are reasonably reliable."
+        case .excellent: return "Strong data foundation — high confidence in results."
+        }
+    }
+
+    // MARK: - Slider card
+
+    // Outcome name sits centered above the slider; LOWEST / HIGHEST labels
+    // (with their live percentage and session count) flank the slider on
+    // either side. Counts come straight from sliderPosition so they update
+    // in real time with the percentage, rather than waiting for the
+    // debounced panel cache.
+    private func sliderCard(analysis: AnalysisCache) -> some View {
+        let total = analysis.sortedSnapshots.count
+        let split = liveSplitIndex(for: analysis)
+        let lowerPct = Int(round(sliderPosition * 100))
+        let higherPct = 100 - lowerPct
+
+        return VStack(spacing: 14) {
+            Text(outcome)
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundColor(Theme.textPrimary)
+                .frame(maxWidth: .infinity)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            HStack(alignment: .center, spacing: 14) {
+                sliderSideLabels(
+                    label: "LOWEST",
+                    percent: lowerPct,
+                    count: split,
+                    maxCount: total,
+                    alignment: .leading
+                )
+                sliderControl(totalSessions: total)
+                    .frame(maxWidth: .infinity)
+                sliderSideLabels(
+                    label: "HIGHEST",
+                    percent: higherPct,
+                    count: total - split,
+                    maxCount: total,
+                    alignment: .trailing
+                )
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    // Each numeric Text sits in a ZStack with a hidden reference sized to
+    // the worst-case content for the current total session count ("100%"
+    // and "\(maxCount) sessions"). The column reserves only as much width
+    // as the labels could actually need — no padded minWidth eating into
+    // the slider — while still staying constant during a drag so the
+    // slider's available width doesn't shift mid-gesture.
+    private func sliderSideLabels(
+        label: String,
+        percent: Int,
+        count: Int,
+        maxCount: Int,
+        alignment: HorizontalAlignment
+    ) -> some View {
+        let zAlignment: Alignment = (alignment == .trailing) ? .trailing : .leading
+        return VStack(alignment: alignment, spacing: 4) {
+            Text(label)
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+
+            ZStack(alignment: zAlignment) {
+                Text("100%")
+                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .hidden()
+                Text("\(percent)%")
+                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(Theme.textPrimary)
+            }
+
+            ZStack(alignment: zAlignment) {
+                Text("\(maxCount) sessions")
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .hidden()
+                Text("\(count) session\(count == 1 ? "" : "s")")
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundColor(Theme.textSecondary)
+            }
+        }
+    }
+
+    // Track is split into colored segments matching each sufficiency tier
+    // based on the smaller of the two buckets at every slider position.
+    // Segments are mirrored on both ends because either side can be the
+    // smaller bucket — moving the thumb toward an edge shrinks that side.
+    // Nine evenly spaced tick marks and a vertical pill thumb sit on top.
+    private func sliderControl(totalSessions: Int) -> some View {
         GeometryReader { geo in
             let width = geo.size.width
             let trackHeight: CGFloat = 6
@@ -391,9 +462,7 @@ struct RaceEngineerView: View {
             let thumbX = max(0, min(width, width * sliderPosition))
 
             ZStack {
-                Capsule()
-                    .fill(Theme.textTertiary)
-                    .frame(width: width, height: trackHeight)
+                sliderTrack(width: width, height: trackHeight, totalSessions: totalSessions)
 
                 ForEach(1..<10, id: \.self) { i in
                     let pct = CGFloat(i) / 10.0
@@ -440,6 +509,72 @@ struct RaceEngineerView: View {
         }
     }
 
+    private func sliderTrack(width: CGFloat, height: CGFloat, totalSessions: Int) -> some View {
+        let segments = sufficiencySegments(totalSessions: totalSessions)
+        return HStack(spacing: 0) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
+                Rectangle()
+                    .fill(seg.color)
+                    .frame(width: max(0, width * CGFloat(seg.end - seg.start)))
+            }
+        }
+        .frame(width: width, height: height)
+        .clipShape(Capsule())
+    }
+
+    // Builds the color segments shown along the slider track. Boundaries
+    // match the points where the smaller bucket crosses each sufficiency
+    // threshold (6 / 11 / 16 / 25). Subtracting 0.5 before dividing by the
+    // total accounts for the `round(p * T)` rounding the badge uses to
+    // pick a tier, so a slider position lands on the same color as the
+    // badge it would produce. When the total session count is too small
+    // for a tier to be reachable, that color is simply omitted.
+    private func sufficiencySegments(totalSessions T: Int) -> [SliderTrackSegment] {
+        let levelColors: [Color] = [
+            DataSufficiencyLevel.bad.color,
+            DataSufficiencyLevel.poor.color,
+            DataSufficiencyLevel.fair.color,
+            DataSufficiencyLevel.good.color,
+            DataSufficiencyLevel.excellent.color
+        ]
+
+        guard T > 0 else {
+            return [SliderTrackSegment(start: 0, end: 1, color: levelColors[0])]
+        }
+
+        let total = Double(T)
+        let thresholds: [Double] = [6, 11, 16, 25].map { (Double($0) - 0.5) / total }
+        var leftBoundaries: [Double] = []
+        for t in thresholds {
+            if t < 0.5 { leftBoundaries.append(t) } else { break }
+        }
+
+        var segments: [SliderTrackSegment] = []
+        var cursor: Double = 0
+
+        for (i, b) in leftBoundaries.enumerated() {
+            segments.append(SliderTrackSegment(start: cursor, end: b, color: levelColors[i]))
+            cursor = b
+        }
+
+        if let lastBoundary = leftBoundaries.last {
+            let highestReachable = leftBoundaries.count
+            let midEnd = 1 - lastBoundary
+            segments.append(SliderTrackSegment(start: cursor, end: midEnd, color: levelColors[highestReachable]))
+            cursor = midEnd
+
+            for i in stride(from: leftBoundaries.count - 1, through: 0, by: -1) {
+                let segEnd: Double = (i == 0) ? 1.0 : (1 - leftBoundaries[i - 1])
+                segments.append(SliderTrackSegment(start: cursor, end: segEnd, color: levelColors[i]))
+                cursor = segEnd
+            }
+        } else {
+            segments.append(SliderTrackSegment(start: 0, end: 1, color: levelColors[0]))
+        }
+
+        return segments
+    }
+
     // MARK: - Panel
 
     private func comparisonPanel(
@@ -448,10 +583,6 @@ struct RaceEngineerView: View {
         panel: PanelCache
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            panelHeader(side: side, panel: panel)
-
-            Divider().background(Theme.hairline)
-
             VStack(alignment: .leading, spacing: 6) {
                 Text("SESSION AVERAGES")
                     .font(.system(size: 10, weight: .heavy))
@@ -485,33 +616,6 @@ struct RaceEngineerView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Theme.hairline, lineWidth: 1)
         )
-    }
-
-    // Lowest/Highest tag + live percentage + live session count. The
-    // percentage is driven directly off `sliderPosition` so it tracks the
-    // thumb in real time even while the panel averages below are
-    // debouncing. The count comes from `panel.splitIndex`, also live.
-    private func panelHeader(side: PanelSide, panel: PanelCache) -> some View {
-        let isLower = (side == .lower)
-        let pct = isLower
-            ? Int(round(sliderPosition * 100))
-            : 100 - Int(round(sliderPosition * 100))
-        let count = isLower
-            ? panel.splitIndex
-            : panel.totalSessions - panel.splitIndex
-
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(isLower ? "LOWEST" : "HIGHEST")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
-            Text("\(pct)%")
-                .font(.system(size: 18, weight: .heavy, design: .rounded))
-                .foregroundColor(Theme.textPrimary)
-            Text("\(count) session\(count == 1 ? "" : "s")")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(Theme.textSecondary)
-        }
     }
 
     private func outcomeRow(side: PanelSide, analysis: AnalysisCache, panel: PanelCache) -> some View {
@@ -726,6 +830,23 @@ struct RaceEngineerView: View {
         }
     }
 
+    // Live count of sessions on the lower-outcome side of the slider at the
+    // current sliderPosition. Read directly off the state value so labels,
+    // sufficiency badge, and detail sheet all update without waiting on the
+    // panel debounce.
+    private func liveSplitIndex(for analysis: AnalysisCache) -> Int {
+        let total = analysis.sortedSnapshots.count
+        return min(max(0, Int(round(sliderPosition * Double(total)))), total)
+    }
+
+    // Smaller of the two buckets — the binding constraint on comparison
+    // reliability, since either side's average is only as trustworthy as
+    // its own sample size.
+    private func smallerBucketSize(for analysis: AnalysisCache) -> Int {
+        let split = liveSplitIndex(for: analysis)
+        return min(split, analysis.sortedSnapshots.count - split)
+    }
+
     // MARK: - Formatting
 
     private func formatValue(_ value: Double, fieldType: FieldType) -> String {
@@ -753,6 +874,12 @@ private enum PanelSide {
 
 private enum DirectionState {
     case up, down, none
+}
+
+private struct SliderTrackSegment {
+    let start: Double
+    let end: Double
+    let color: Color
 }
 
 private struct RaceEngineerSnapshot: Sendable {
@@ -895,103 +1022,6 @@ private struct PanelCache: Sendable {
             fieldOrder: order,
             leftAverages: leftAverages,
             rightAverages: rightAverages
-        )
-    }
-}
-
-// MARK: - Data sufficiency detail sheet
-
-// Mirrors the modal style used by CorrelationPairDetailView in the
-// Correlation Matrix — NavigationStack + Theme.background + xmark close
-// button + a single result card. Reuses `DataSufficiencyLevel.description`
-// so the body text already explains the level and how many sessions are
-// needed to reach the next tier.
-private struct RaceEngineerDataSufficiencyDetail: View {
-    @Environment(\.dismiss) private var dismiss
-    let level: DataSufficiencyLevel
-    let sampleSize: Int
-    let outcome: String
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                Theme.background.ignoresSafeArea()
-                ScrollView {
-                    VStack(spacing: 20) {
-                        outcomeHeader
-                        detailCard
-                    }
-                    .padding(20)
-                }
-            }
-            .navigationTitle("Data Sufficiency")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(Theme.textSecondary)
-                    }
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-    }
-
-    private var outcomeHeader: some View {
-        HStack {
-            Text(outcome.uppercased())
-                .font(.system(size: 13, weight: .heavy))
-                .tracking(1)
-                .foregroundColor(Theme.accent)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.accent.opacity(0.35), lineWidth: 1)
-        )
-    }
-
-    private var detailCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label("DATA SUFFICIENCY", systemImage: "square.stack.3d.up.fill")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundColor(Theme.accent)
-
-            DataSufficiencyBadge(level: level)
-
-            Text(level.description(sampleSize: sampleSize))
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 6) {
-                Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(Theme.textTertiary)
-                Text("\(sampleSize) session\(sampleSize == 1 ? "" : "s") analyzed")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(0.8)
-                    .foregroundColor(Theme.textTertiary)
-            }
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
         )
     }
 }
