@@ -234,11 +234,12 @@ private struct OverviewSection: View {
                 .foregroundColor(Theme.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-            Text("TOTAL")
+            Text("TOTAL SESSIONS")
                 .font(.system(size: 11, weight: .heavy))
                 .tracking(1.5)
                 .foregroundColor(Theme.textSecondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .layoutPriority(1)
     }

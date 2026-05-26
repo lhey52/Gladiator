@@ -410,7 +410,7 @@ struct AddSessionView: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 14)
         }
-        .bracketPanel(.tile)
+        .squarePanel()
     }
 
     private func cardHeader(_ text: String) -> some View {
@@ -436,7 +436,7 @@ struct AddSessionView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .bracketPanel(.tile)
+        .squarePanel()
     }
 
     private func collapsibleHeader(
@@ -781,7 +781,13 @@ struct AddSessionView: View {
             expandedZoneFooter
         }
         .frame(maxWidth: .infinity)
-        .bracketPanel(.hero)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Theme.accent.opacity(0.55), lineWidth: 1.5)
+        )
     }
 
     private var expandedZoneFooter: some View {
