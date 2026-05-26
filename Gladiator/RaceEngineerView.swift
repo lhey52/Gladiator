@@ -44,10 +44,6 @@ struct RaceEngineerView: View {
             }
     }
 
-    private var canAnalyze: Bool {
-        !outcome.isEmpty
-    }
-
     private var outcomeFieldType: FieldType {
         plottableFields.first { $0.name == outcome }?.fieldType ?? .number
     }
@@ -103,6 +99,14 @@ struct RaceEngineerView: View {
             .fullScreenCover(isPresented: $showingPaywall) {
                 PaywallView()
             }
+            .onChange(of: showingFilter) { _, isShowing in
+                // Filter sheet just dismissed — re-run analysis if we
+                // had previous results so the readout stays in sync
+                // without an explicit Reanalyze tap.
+                if !isShowing, hasAnalyzed, !outcome.isEmpty {
+                    runAnalysis()
+                }
+            }
         }
         .preferredColorScheme(.dark)
     }
@@ -151,19 +155,24 @@ struct RaceEngineerView: View {
             )
         } else {
             ScrollView {
-                VStack(spacing: 18) {
-                    ToolDescriptionCard(text: "Compare your setup across sessions to identify what changes between your best and worst results.")
-                    outcomeCard
-                    analyzeButton
-                    if hasAnalyzed, let analysis = analysisCache {
+                VStack(spacing: 14) {
+                    diagnosticHeader
+                    if outcome.isEmpty {
+                        outcomePromptCard
+                    } else if hasAnalyzed, let analysis = analysisCache {
                         if analysis.sortedSnapshots.count >= 4 {
-                            comparisonSection(analysis: analysis)
+                            thresholdCursorPanel(analysis: analysis)
+                            if let panel = panelCache {
+                                comparisonReadoutPanel(analysis: analysis, panel: panel)
+                            }
                         } else {
                             notEnoughDataCard
                         }
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .padding(.bottom, 28)
             }
         }
     }
@@ -188,103 +197,133 @@ struct RaceEngineerView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Outcome card
+    // MARK: - Diagnostic header
 
-    private var outcomeCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Select an outcome metric to compare:")
-                .font(.system(size: 11, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.accent)
+    // Compact instrument strip — outcome selector spans the full section
+    // width, with dataset status centered underneath. Reads as a diagnostic
+    // console header rather than a labeled form.
+    private var diagnosticHeader: some View {
+        VStack(spacing: 10) {
+            outcomePill
+            datasetReadout
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .bracketPanel(.hero)
+    }
 
-            Button { showingOutcomePicker = true } label: {
-                HStack(spacing: 10) {
-                    if let field = plottableFields.first(where: { $0.name == outcome }) {
+    private var outcomePill: some View {
+        Button { showingOutcomePicker = true } label: {
+            HStack(spacing: 10) {
+                Text("OUTCOME")
+                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .tracking(1.4)
+                    .foregroundColor(Theme.accent)
+                Rectangle()
+                    .fill(Theme.accent.opacity(0.4))
+                    .frame(width: 1, height: 14)
+                Spacer(minLength: 0)
+                if let field = plottableFields.first(where: { $0.name == outcome }) {
+                    HStack(spacing: 6) {
                         Image(systemName: field.fieldType.systemImage)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(Theme.accent)
+                            .font(.system(size: 11, weight: .heavy))
+                            .foregroundColor(Theme.textPrimary)
                         Text(outcome.uppercased())
-                            .font(.system(size: 15, weight: .heavy))
-                            .tracking(1)
+                            .font(.system(size: 14, weight: .heavy))
+                            .tracking(0.8)
                             .foregroundColor(Theme.textPrimary)
                             .lineLimit(1)
-                    } else {
-                        Text("SELECT FIELD")
-                            .font(.system(size: 13, weight: .heavy))
-                            .tracking(1)
-                            .foregroundColor(Theme.textTertiary)
+                            .minimumScaleFactor(0.7)
                     }
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Theme.textTertiary)
+                } else {
+                    Text("TAP TO SELECT")
+                        .font(.system(size: 13, weight: .heavy))
+                        .tracking(0.8)
+                        .foregroundColor(Theme.textSecondary)
                 }
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surfaceElevated)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Theme.hairline, lineWidth: 1)
-                )
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .heavy))
+                    .foregroundColor(Theme.textTertiary)
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Theme.surfaceElevated)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .stroke(outcome.isEmpty ? Theme.accent.opacity(0.5) : Theme.hairline, lineWidth: 1)
+            )
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
+    }
+
+    private var datasetReadout: some View {
+        let count = plottableFields.isEmpty ? 0 : (analysisCache?.sortedSnapshots.count ?? sessions.count)
+        return HStack(spacing: 8) {
+            Text("n = \(count)")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .monospacedDigit()
+                .foregroundColor(Theme.textPrimary)
+            Text("·")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundColor(Theme.textTertiary)
+            Text(filter.isActive ? "FILTERED" : "ALL SESSIONS")
+                .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                .tracking(1.4)
+                .foregroundColor(filter.isActive ? Theme.accent : Theme.textTertiary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Pick prompt placeholder
+
+    private var outcomePromptCard: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "scope")
+                .font(.system(size: 32, weight: .light))
+                .foregroundColor(Theme.accent.opacity(0.7))
+            Text("AWAITING OUTCOME")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .tracking(2)
+                .foregroundColor(Theme.textSecondary)
+            Text("Pick the metric you want to diagnose — the tool will sort sessions by it and split them into a lower and higher group for side-by-side comparison.")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Theme.textTertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .padding(.horizontal, 18)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
+            RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Theme.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .stroke(Theme.hairline, lineWidth: 1)
         )
     }
 
-    // MARK: - Analyze button
-
-    private var analyzeButton: some View {
-        Button {
-            runAnalysis()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "rectangle.split.2x1.fill")
-                    .font(.system(size: 13, weight: .heavy))
-                Text("ANALYZE")
-                    .font(.system(size: 14, weight: .heavy))
-                    .tracking(1.5)
-            }
-            .foregroundColor(canAnalyze ? Theme.background : Theme.textTertiary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(canAnalyze ? Theme.accent : Theme.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(canAnalyze ? Theme.accent : Theme.hairline, lineWidth: 1)
-            )
-            .shadow(color: canAnalyze ? Theme.accent.opacity(0.4) : .clear, radius: 12)
-        }
-        .buttonStyle(.plain)
-        .disabled(!canAnalyze)
-    }
+    // MARK: - Analyzing overlay
 
     private var analyzingOverlay: some View {
         ZStack {
-            Theme.background.opacity(0.85).ignoresSafeArea()
-            VStack(spacing: 20) {
+            Theme.background.opacity(0.88).ignoresSafeArea()
+            VStack(spacing: 18) {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(Theme.accent)
-                    .scaleEffect(1.4)
+                    .scaleEffect(1.3)
                 Text("RACE ENGINEER")
-                    .font(.system(size: 13, weight: .heavy))
+                    .font(.system(size: 12, weight: .heavy, design: .monospaced))
                     .tracking(2.5)
                     .foregroundColor(Theme.accent)
                 Text("Comparing sessions by \(outcome)…")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 36)
@@ -293,154 +332,93 @@ struct RaceEngineerView: View {
         .transition(.opacity)
     }
 
-    // MARK: - Comparison section
+    // MARK: - Threshold cursor panel
 
-    @ViewBuilder
-    private func comparisonSection(analysis: AnalysisCache) -> some View {
-        VStack(spacing: 14) {
-            dataSufficiencyRow(analysis: analysis)
-            sliderCard(analysis: analysis)
-            if let panel = panelCache {
-                combinedComparisonCard(analysis: analysis, panel: panel)
-            }
-        }
-    }
+    // Top hero panel. Wraps the slider in a bracket-cornered frame with the
+    // sufficiency badge + reliability blurb above, and a short footnote on
+    // the colored track underneath. Concrete per-side counts live in the
+    // comparison header below, where the slider's effect is most visible.
+    private func thresholdCursorPanel(analysis: AnalysisCache) -> some View {
+        let total = analysis.sortedSnapshots.count
+        let sufficiency = DataSufficiencyLevel.from(smallerBucketSize: smallerBucketSize(for: analysis))
 
-    // Sufficiency is rated against the smaller of the two slider buckets —
-    // averages can only be as reliable as the side with fewer sessions, so
-    // an 8/32 split is bounded by the 8-session bucket regardless of how
-    // many sessions sit on the other side. Reading sliderPosition directly
-    // (rather than the debounced panel cache) keeps the badge live as the
-    // user drags.
-    private func dataSufficiencyRow(analysis: AnalysisCache) -> some View {
-        let level = DataSufficiencyLevel.from(smallerBucketSize: smallerBucketSize(for: analysis))
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Label("DATA SUFFICIENCY", systemImage: "square.stack.3d.up.fill")
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(1.5)
+        return VStack(spacing: 14) {
+            // Top label row
+            HStack {
+                Label("SPLIT", systemImage: "square.split.2x1")
+                    .labelStyle(.titleAndIcon)
+                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .tracking(1.4)
                     .foregroundColor(Theme.accent)
                 Spacer()
-                DataSufficiencyBadge(level: level)
+                DataSufficiencyBadge(level: sufficiency)
             }
-            Text(sufficiencyShortDescription(for: level))
+
+            // Reliability blurb — tracks the sufficiency tier so the user
+            // knows how much to trust the comparison before they touch the
+            // slider. Always reserves two lines of vertical space so the
+            // panel doesn't jump when the user drags the slider between
+            // tiers with short and long descriptions.
+            Text(sufficiencyDescription(for: sufficiency))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(Theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(2, reservesSpace: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            // End labels framing the track
+            HStack {
+                Text("LOWER")
+                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .tracking(1.4)
+                    .foregroundColor(Theme.textSecondary)
+                Spacer()
+                Text("HIGHER")
+                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .tracking(1.4)
+                    .foregroundColor(Theme.textSecondary)
+            }
+
+            sliderControl(totalSessions: total)
+
+            // Percentile scale — 5 evenly-spaced labels so each one's center
+            // lands at 10/30/50/70/90% of the slider's track width.
+            HStack(spacing: 0) {
+                ForEach(["P10", "P30", "P50", "P70", "P90"], id: \.self) { mark in
+                    Text(mark)
+                        .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                        .tracking(0.6)
+                        .foregroundColor(Theme.textTertiary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            // Footnote — explains the colored track without spelling out the
+            // sufficiency tier math. Intentionally generic so it stays
+            // accurate at any session count.
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(Theme.textTertiary)
+                Text("Color bands shift as more sessions are added.")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 2)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
+        .bracketPanel(.hero)
     }
 
-    private func sufficiencyShortDescription(for level: DataSufficiencyLevel) -> String {
+    private func sufficiencyDescription(for level: DataSufficiencyLevel) -> String {
         switch level {
         case .bad: return "Too few sessions for a reliable comparison."
         case .poor: return "Limited data — treat results as early indicators only."
         case .fair: return "Comparison is directionally useful but expect some movement as more data accumulates."
         case .good: return "Solid foundation — results are reasonably reliable."
         case .excellent: return "Strong data foundation — high confidence in results."
-        }
-    }
-
-    // MARK: - Slider card
-
-    // Outcome name sits centered above the slider; LOWEST / HIGHEST labels
-    // (with their live percentage and session count) flank the slider on
-    // either side. Counts come straight from sliderPosition so they update
-    // in real time with the percentage, rather than waiting for the
-    // debounced panel cache.
-    private func sliderCard(analysis: AnalysisCache) -> some View {
-        let total = analysis.sortedSnapshots.count
-        let split = liveSplitIndex(for: analysis)
-        let lowerPct = Int(round(sliderPosition * 100))
-        let higherPct = 100 - lowerPct
-
-        return VStack(spacing: 14) {
-            Text(outcome)
-                .font(.system(size: 16, weight: .heavy))
-                .foregroundColor(Theme.textPrimary)
-                .frame(maxWidth: .infinity)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-
-            HStack(alignment: .center, spacing: 14) {
-                sliderSideLabels(
-                    label: "LOWEST",
-                    percent: lowerPct,
-                    count: split,
-                    maxCount: total,
-                    alignment: .leading
-                )
-                sliderControl(totalSessions: total)
-                    .frame(maxWidth: .infinity)
-                sliderSideLabels(
-                    label: "HIGHEST",
-                    percent: higherPct,
-                    count: total - split,
-                    maxCount: total,
-                    alignment: .trailing
-                )
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
-    }
-
-    // Each numeric Text sits in a ZStack with a hidden reference sized to
-    // the worst-case content for the current total session count ("100%"
-    // and "\(maxCount) sessions"). The column reserves only as much width
-    // as the labels could actually need — no padded minWidth eating into
-    // the slider — while still staying constant during a drag so the
-    // slider's available width doesn't shift mid-gesture.
-    private func sliderSideLabels(
-        label: String,
-        percent: Int,
-        count: Int,
-        maxCount: Int,
-        alignment: HorizontalAlignment
-    ) -> some View {
-        let zAlignment: Alignment = (alignment == .trailing) ? .trailing : .leading
-        return VStack(alignment: alignment, spacing: 4) {
-            Text(label)
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
-
-            ZStack(alignment: zAlignment) {
-                Text("100%")
-                    .font(.system(size: 18, weight: .heavy, design: .rounded))
-                    .monospacedDigit()
-                    .hidden()
-                Text("\(percent)%")
-                    .font(.system(size: 18, weight: .heavy, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(Theme.textPrimary)
-            }
-
-            ZStack(alignment: zAlignment) {
-                Text("\(maxCount) sessions")
-                    .font(.system(size: 11, weight: .semibold))
-                    .monospacedDigit()
-                    .hidden()
-                Text("\(count) session\(count == 1 ? "" : "s")")
-                    .font(.system(size: 11, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundColor(Theme.textSecondary)
-            }
         }
     }
 
@@ -454,7 +432,7 @@ struct RaceEngineerView: View {
             let width = geo.size.width
             let trackHeight: CGFloat = 6
             let thumbWidth: CGFloat = 6
-            let thumbHeight: CGFloat = 28
+            let thumbHeight: CGFloat = 32
             let containerHeight: CGFloat = thumbHeight
             let thumbX = max(0, min(width, width * sliderPosition))
 
@@ -472,7 +450,7 @@ struct RaceEngineerView: View {
                 RoundedRectangle(cornerRadius: thumbWidth / 2, style: .continuous)
                     .fill(Theme.accent)
                     .frame(width: thumbWidth, height: thumbHeight)
-                    .shadow(color: Theme.accent.opacity(0.5), radius: 6)
+                    .shadow(color: Theme.accent.opacity(0.55), radius: 6)
                     .position(x: thumbX, y: containerHeight / 2)
             }
             .frame(width: width, height: containerHeight)
@@ -487,7 +465,7 @@ struct RaceEngineerView: View {
                     }
             )
         }
-        .frame(height: 28)
+        .frame(height: 32)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Lower / higher split")
         .accessibilityValue("\(Int(round(sliderPosition * 100)))% lower, \(Int(round((1 - sliderPosition) * 100)))% higher")
@@ -572,154 +550,194 @@ struct RaceEngineerView: View {
         return segments
     }
 
-    // MARK: - Combined comparison card
+    // MARK: - Comparison readout
 
-    // Single card laying out both buckets side by side, row by row. Mirrors
-    // Session Comparison's resultsCard: a tinted header strip, then one row
-    // per metric with the field name shared on top of two flanking values
-    // separated by a hairline divider. The outcome row is kept visually
-    // distinct (subtle accent-tinted background, larger orange values) so
-    // it doesn't blend in with the regular contributor rows.
-    private func combinedComparisonCard(analysis: AnalysisCache, panel: PanelCache) -> some View {
+    // Spec-sheet style table. Header strip names the two sides, outcome row
+    // pinned at top with bracket emphasis, contributor rows ordered by
+    // normalized delta. Each row shows a thin delta bar indicating direction
+    // and magnitude, plus the signed numeric Δ.
+    private func comparisonReadoutPanel(analysis: AnalysisCache, panel: PanelCache) -> some View {
         VStack(spacing: 0) {
-            combinedHeader(panel: panel)
-            outcomeComparisonRow(analysis: analysis, panel: panel)
-            ForEach(panel.fieldOrder, id: \.self) { fieldName in
-                Divider().background(Theme.hairline)
-                metricComparisonRow(fieldName: fieldName, analysis: analysis, panel: panel)
+            comparisonHeaderStrip(panel: panel)
+            outcomeRow(analysis: analysis, panel: panel)
+            ForEach(Array(panel.fieldOrder.enumerated()), id: \.element) { index, fieldName in
+                Rectangle()
+                    .fill(Theme.hairline)
+                    .frame(height: 1)
+                metricRow(
+                    rank: index,
+                    fieldName: fieldName,
+                    analysis: analysis,
+                    panel: panel
+                )
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
+        .bracketPanel(.hero)
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
     }
 
-    private func combinedHeader(panel: PanelCache) -> some View {
+    // Comparison header — the place where the slider's effect on the split
+    // is most visible. Each side gets a two-line block showing percent of
+    // sessions and the actual count. Δ glyph sits centered between the two.
+    private func comparisonHeaderStrip(panel: PanelCache) -> some View {
         let lowerCount = panel.splitIndex
         let higherCount = panel.totalSessions - panel.splitIndex
-        return HStack {
-            Text("LOWEST")
-                .font(.system(size: 11, weight: .heavy))
-                .tracking(1)
+        let total = max(1, panel.totalSessions)
+        let lowerPct = Int(round(Double(lowerCount) / Double(total) * 100))
+        let higherPct = 100 - lowerPct
+
+        return HStack(alignment: .center, spacing: 10) {
+            comparisonHeaderSide(label: "LOWER", percent: lowerPct, count: lowerCount, alignment: .leading)
+            Text("Δ")
+                .font(.system(size: 16, weight: .heavy, design: .monospaced))
                 .foregroundColor(Theme.accent)
-            Spacer()
-            Text("\(lowerCount) vs \(higherCount) sessions")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(Theme.textTertiary)
-                .monospacedDigit()
-            Spacer()
-            Text("HIGHEST")
-                .font(.system(size: 11, weight: .heavy))
-                .tracking(1)
-                .foregroundColor(Theme.accent)
+            comparisonHeaderSide(label: "HIGHER", percent: higherPct, count: higherCount, alignment: .trailing)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(Theme.surfaceElevated)
     }
 
-    private func outcomeComparisonRow(analysis: AnalysisCache, panel: PanelCache) -> some View {
+    private func comparisonHeaderSide(label: String, percent: Int, count: Int, alignment: HorizontalAlignment) -> some View {
+        let frameAlignment: Alignment = alignment == .leading ? .leading : .trailing
+        let sessionWord = "\(count) session\(count == 1 ? "" : "s")"
+
+        return VStack(alignment: alignment, spacing: 4) {
+            HStack(spacing: 6) {
+                if alignment == .trailing {
+                    Spacer(minLength: 0)
+                    Text("\(percent)%")
+                        .font(.system(size: 18, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(Theme.textPrimary)
+                    Text(label)
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .tracking(1.4)
+                        .foregroundColor(Theme.accent)
+                } else {
+                    Text(label)
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .tracking(1.4)
+                        .foregroundColor(Theme.accent)
+                    Text("\(percent)%")
+                        .font(.system(size: 18, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(Theme.textPrimary)
+                    Spacer(minLength: 0)
+                }
+            }
+            Text(sessionWord.uppercased())
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .tracking(1)
+                .monospacedDigit()
+                .foregroundColor(Theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: frameAlignment)
+    }
+
+    private func outcomeRow(analysis: AnalysisCache, panel: PanelCache) -> some View {
         let leftAvg = panel.leftOutcomeAvg
         let rightAvg = panel.rightOutcomeAvg
         let leftDisplay = leftAvg.map { formatValue($0, fieldType: analysis.outcomeFieldType) } ?? "—"
         let rightDisplay = rightAvg.map { formatValue($0, fieldType: analysis.outcomeFieldType) } ?? "—"
-        return VStack(spacing: 8) {
+        let signed = signedDelta(leftAvg, rightAvg)
+        let normalized = 1.0 // outcome bar always at full magnitude — it IS the axis
+        let rightHigher = (rightAvg ?? 0) > (leftAvg ?? 0)
+
+        return VStack(spacing: 10) {
             Text(analysis.outcome.uppercased())
-                .font(.system(size: 11, weight: .heavy))
-                .tracking(1.5)
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .tracking(1.4)
                 .foregroundColor(Theme.accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .frame(maxWidth: .infinity, alignment: .center)
-            HStack {
-                outcomeValueText(leftDisplay, missing: leftAvg == nil)
-                    .frame(maxWidth: .infinity)
-                Rectangle()
-                    .fill(Theme.hairline)
-                    .frame(width: 1, height: 32)
-                outcomeValueText(rightDisplay, missing: rightAvg == nil)
-                    .frame(maxWidth: .infinity)
+            HStack(alignment: .center, spacing: 12) {
+                Text(leftDisplay)
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(leftAvg == nil ? Theme.textTertiary : Theme.accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                DeltaIndicator(
+                    normalized: normalized,
+                    rightHigher: rightHigher,
+                    deltaText: signed.flatMap { formatSignedDelta($0, fieldType: analysis.outcomeFieldType) } ?? "—",
+                    isOutcome: true
+                )
+                .frame(maxWidth: .infinity)
+                Text(rightDisplay)
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(rightAvg == nil ? Theme.textTertiary : Theme.accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .padding(.vertical, 14)
+        .background(Theme.accent.opacity(0.05))
     }
 
-    private func outcomeValueText(_ text: String, missing: Bool) -> some View {
-        Text(text)
-            .font(.system(size: 24, weight: .heavy, design: .rounded))
-            .foregroundColor(missing ? Theme.textTertiary : Theme.accent)
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
-    }
-
-    private func metricComparisonRow(fieldName: String, analysis: AnalysisCache, panel: PanelCache) -> some View {
+    private func metricRow(rank: Int, fieldName: String, analysis: AnalysisCache, panel: PanelCache) -> some View {
         let leftAvg = panel.leftAverages[fieldName]
         let rightAvg = panel.rightAverages[fieldName]
         let fieldType = analysis.fieldTypes[fieldName] ?? .number
         let leftDisplay = leftAvg.map { formatValue($0, fieldType: fieldType) } ?? "—"
         let rightDisplay = rightAvg.map { formatValue($0, fieldType: fieldType) } ?? "—"
-        let (leftDir, rightDir) = directions(leftAvg: leftAvg, rightAvg: rightAvg)
-        return VStack(spacing: 8) {
-            Text(fieldName.uppercased())
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .frame(maxWidth: .infinity, alignment: .center)
-            HStack {
-                metricValueText(leftDisplay, direction: leftDir, missing: leftAvg == nil)
-                    .frame(maxWidth: .infinity)
-                Rectangle()
-                    .fill(Theme.hairline)
-                    .frame(width: 1, height: 28)
-                metricValueText(rightDisplay, direction: rightDir, missing: rightAvg == nil)
-                    .frame(maxWidth: .infinity)
+        let signed = signedDelta(leftAvg, rightAvg)
+        let normalized = panel.normalizedDeltas[fieldName] ?? 0
+        let rightHigher = (rightAvg ?? 0) > (leftAvg ?? 0)
+        let rankOpacity: Double = {
+            switch rank {
+            case 0: return 0.9
+            case 1: return 0.55
+            case 2: return 0.3
+            default: return 0
             }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
+        }()
 
-    private func metricValueText(_ text: String, direction: DirectionState, missing: Bool) -> some View {
-        HStack(spacing: 4) {
-            Text(text)
-                .font(.system(size: 20, weight: .heavy, design: .rounded))
-                .foregroundColor(missing ? Theme.textTertiary : Theme.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            directionGlyph(direction)
-        }
-    }
-
-    // Returns (leftDirection, rightDirection) — .up on whichever side has
-    // the higher average, .down on the other, both .none if either value
-    // is missing or the two are equal.
-    private func directions(leftAvg: Double?, rightAvg: Double?) -> (DirectionState, DirectionState) {
-        guard let left = leftAvg, let right = rightAvg else { return (.none, .none) }
-        if abs(left - right) < 1e-9 { return (.none, .none) }
-        return left > right ? (.up, .down) : (.down, .up)
-    }
-
-    @ViewBuilder
-    private func directionGlyph(_ direction: DirectionState) -> some View {
-        switch direction {
-        case .up:
-            Image(systemName: "arrow.up")
-                .font(.system(size: 10, weight: .heavy))
-                .foregroundColor(Theme.success)
-        case .down:
-            Image(systemName: "arrow.down")
-                .font(.system(size: 10, weight: .heavy))
-                .foregroundColor(Theme.danger)
-        case .none:
-            EmptyView()
+        return HStack(spacing: 0) {
+            // Rank stripe — fades through top 3 contributors, vanishes for the rest
+            Rectangle()
+                .fill(Theme.accent.opacity(rankOpacity))
+                .frame(width: 2)
+            VStack(spacing: 8) {
+                Text(fieldName.uppercased())
+                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundColor(Theme.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                HStack(alignment: .center, spacing: 12) {
+                    Text(leftDisplay)
+                        .font(.system(size: 17, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(leftAvg == nil ? Theme.textTertiary : Theme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    DeltaIndicator(
+                        normalized: normalized,
+                        rightHigher: rightHigher,
+                        deltaText: signed.flatMap { formatSignedDelta($0, fieldType: fieldType) } ?? "—",
+                        isOutcome: false
+                    )
+                    .frame(maxWidth: .infinity)
+                    Text(rightDisplay)
+                        .font(.system(size: 17, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(rightAvg == nil ? Theme.textTertiary : Theme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
         }
     }
 
@@ -731,23 +749,24 @@ struct RaceEngineerView: View {
                 .font(.system(size: 32, weight: .bold))
                 .foregroundColor(Theme.accent.opacity(0.8))
             Text("NOT ENOUGH SESSIONS")
-                .font(.system(size: 14, weight: .heavy))
+                .font(.system(size: 12, weight: .heavy, design: .monospaced))
                 .tracking(2)
                 .foregroundColor(Theme.textPrimary)
             Text("Not enough sessions to compare. Log more sessions with \(outcome) recorded.")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
+            RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Theme.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
         )
+        .overlay(BracketCorners(color: Theme.accent.opacity(0.55), size: 10, lineWidth: 1.2))
     }
 
     // MARK: - Actions
@@ -759,10 +778,11 @@ struct RaceEngineerView: View {
         hasAnalyzed = false
         analysisCache = nil
         panelCache = nil
+        runAnalysis()
     }
 
     private func runAnalysis() {
-        guard canAnalyze else { return }
+        guard !outcome.isEmpty else { return }
         debounceTask?.cancel()
         debounceTask = nil
 
@@ -865,6 +885,11 @@ struct RaceEngineerView: View {
 
     // MARK: - Formatting
 
+    private func signedDelta(_ left: Double?, _ right: Double?) -> Double? {
+        guard let l = left, let r = right else { return nil }
+        return r - l
+    }
+
     private func formatValue(_ value: Double, fieldType: FieldType) -> String {
         switch fieldType {
         case .time:
@@ -880,13 +905,120 @@ struct RaceEngineerView: View {
             }
         }
     }
+
+    private func formatSignedDelta(_ value: Double, fieldType: FieldType) -> String {
+        let sign = value > 0 ? "+" : (value < 0 ? "−" : "")
+        let magnitude = abs(value)
+        switch fieldType {
+        case .time:
+            // Time deltas are reported in seconds — full mm:ss formatting
+            // would make a 0.08s delta unreadable.
+            if magnitude >= 1 {
+                return "Δ \(sign)\(String(format: "%.2f", magnitude))s"
+            } else {
+                return "Δ \(sign)\(String(format: "%.3f", magnitude))s"
+            }
+        case .number, .text:
+            if magnitude >= 100 {
+                return "Δ \(sign)\(String(format: "%.1f", magnitude))"
+            } else if magnitude >= 10 {
+                return "Δ \(sign)\(String(format: "%.2f", magnitude))"
+            } else {
+                return "Δ \(sign)\(String(format: "%.3f", magnitude))"
+            }
+        }
+    }
+}
+
+// MARK: - Bracket frame
+
+// Four L-shaped corner marks drawn over a container. Signature engineering
+// motif — gives a panel "instrument panel" framing without adding a heavy
+// border. Sized in points; corners scale with the parent. Kept internal so
+// other views (Analytics tile list, etc.) can reuse the same treatment.
+struct BracketCorners: View {
+    var color: Color = Theme.accent.opacity(0.55)
+    var size: CGFloat = 12
+    var lineWidth: CGFloat = 1.4
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            Path { path in
+                // Top-left
+                path.move(to: CGPoint(x: 0, y: size))
+                path.addLine(to: CGPoint(x: 0, y: 0))
+                path.addLine(to: CGPoint(x: size, y: 0))
+                // Top-right
+                path.move(to: CGPoint(x: w - size, y: 0))
+                path.addLine(to: CGPoint(x: w, y: 0))
+                path.addLine(to: CGPoint(x: w, y: size))
+                // Bottom-right
+                path.move(to: CGPoint(x: w, y: h - size))
+                path.addLine(to: CGPoint(x: w, y: h))
+                path.addLine(to: CGPoint(x: w - size, y: h))
+                // Bottom-left
+                path.move(to: CGPoint(x: size, y: h))
+                path.addLine(to: CGPoint(x: 0, y: h))
+                path.addLine(to: CGPoint(x: 0, y: h - size))
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .square, lineJoin: .miter))
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Delta indicator
+
+// Thin horizontal track with a fill bar extending from center toward the
+// higher-value side, magnitude proportional to the normalized delta. The
+// signed Δ value sits below. Two visual styles: outcome (accent-colored,
+// larger) and contributor (subdued white).
+private struct DeltaIndicator: View {
+    let normalized: Double
+    let rightHigher: Bool
+    let deltaText: String
+    let isOutcome: Bool
+
+    var body: some View {
+        VStack(spacing: 6) {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let half = w / 2
+                let magnitude = max(0, min(1, normalized))
+                let fillWidth = half * magnitude
+
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Theme.hairline)
+                        .frame(width: w, height: 3)
+
+                    Capsule()
+                        .fill(isOutcome ? Theme.accent : Color.white.opacity(0.55))
+                        .frame(width: fillWidth, height: 3)
+                        .offset(x: rightHigher ? half : (half - fillWidth))
+
+                    Rectangle()
+                        .fill(Theme.textTertiary)
+                        .frame(width: 1, height: 8)
+                        .offset(x: half - 0.5, y: -2.5)
+                }
+                .frame(height: 8, alignment: .center)
+            }
+            .frame(height: 8)
+
+            Text(deltaText)
+                .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                .tracking(0.4)
+                .foregroundColor(isOutcome ? Theme.accent : Theme.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+    }
 }
 
 // MARK: - Snapshots and caches
-
-private enum DirectionState {
-    case up, down, none
-}
 
 private struct SliderTrackSegment {
     let start: Double
@@ -971,7 +1103,9 @@ private struct AnalysisCache: Sendable {
 
 // Recomputed on each debounced slider settle. Cheap relative to
 // AnalysisCache because the heavy filter / sort / range work is already
-// baked into the analysis input.
+// baked into the analysis input. `normalizedDeltas` is now exposed so the
+// comparison rows can render proportional delta bars without redoing the
+// math.
 private struct PanelCache: Sendable {
     let totalSessions: Int
     let splitIndex: Int
@@ -980,6 +1114,7 @@ private struct PanelCache: Sendable {
     let fieldOrder: [String]
     let leftAverages: [String: Double]
     let rightAverages: [String: Double]
+    let normalizedDeltas: [String: Double]
 
     static func compute(from analysis: AnalysisCache, sliderPosition: Double) -> PanelCache {
         let total = analysis.sortedSnapshots.count
@@ -1005,7 +1140,9 @@ private struct PanelCache: Sendable {
 
         // Normalize each metric's between-panel delta by its own observed
         // range so PSI / seconds / degrees compete fairly for the
-        // descending sort order.
+        // descending sort order — and so the comparison row's delta bar
+        // can be sized consistently regardless of metric units.
+        var normalizedDeltas: [String: Double] = [:]
         var diffs: [(name: String, diff: Double)] = []
         for name in analysis.fieldNames {
             guard let l = leftAverages[name], let r = rightAverages[name] else { continue }
@@ -1016,6 +1153,7 @@ private struct PanelCache: Sendable {
             } else {
                 normalized = raw
             }
+            normalizedDeltas[name] = normalized
             diffs.append((name: name, diff: normalized))
         }
         diffs.sort { $0.diff > $1.diff }
@@ -1033,7 +1171,8 @@ private struct PanelCache: Sendable {
             rightOutcomeAvg: rightOutcome,
             fieldOrder: order,
             leftAverages: leftAverages,
-            rightAverages: rightAverages
+            rightAverages: rightAverages,
+            normalizedDeltas: normalizedDeltas
         )
     }
 }

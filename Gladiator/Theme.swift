@@ -24,3 +24,74 @@ enum Theme {
     static let chassisFillBottom = Color.white.opacity(0.10)
     static let chassisLine = Color.white.opacity(0.14)
 }
+
+// Bracket-cornered panel styling shared across Race Engineer, Analytics, and
+// Dashboard. Tweaking the bracket appearance (color, size, line weight,
+// corner radius) globally only requires editing this one type.
+enum PanelStyle {
+    /// Bold accent brackets — reserved for full-screen tool hero panels.
+    case hero
+    /// Subdued accent brackets — for tile lists and dashboard cards.
+    case tile
+
+    var bracketColor: Color {
+        switch self {
+        case .hero: return Theme.accent.opacity(0.55)
+        case .tile: return Theme.accent.opacity(0.35)
+        }
+    }
+
+    var bracketSize: CGFloat {
+        switch self {
+        case .hero: return 12
+        case .tile: return 10
+        }
+    }
+
+    var bracketLineWidth: CGFloat {
+        switch self {
+        case .hero: return 1.4
+        case .tile: return 1.2
+        }
+    }
+}
+
+extension View {
+    /// Wraps the receiver in the standard engineering panel chrome:
+    /// squared surface fill, hairline border, and L-shaped bracket corners.
+    /// Pass `.hero` for primary tool surfaces, `.tile` for list cards.
+    func bracketPanel(_ style: PanelStyle = .tile, cornerRadius: CGFloat = 4) -> some View {
+        self
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Theme.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Theme.hairline, lineWidth: 1)
+            )
+            .overlay(
+                BracketCorners(
+                    color: style.bracketColor,
+                    size: style.bracketSize,
+                    lineWidth: style.bracketLineWidth
+                )
+            )
+    }
+
+    /// Same squared surface + hairline border as `bracketPanel`, but
+    /// without the L-shaped accent corners. Use when the panel should
+    /// belong visually to the engineering panel family but stay quieter
+    /// than the bracket-cornered variants (e.g., the dashboard).
+    func squarePanel(cornerRadius: CGFloat = 4) -> some View {
+        self
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Theme.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Theme.hairline, lineWidth: 1)
+            )
+    }
+}

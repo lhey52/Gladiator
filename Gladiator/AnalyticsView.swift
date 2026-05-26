@@ -387,10 +387,10 @@ private struct AnalyticsCard<Destination: View>: View {
         Button { showingFullScreen = true } label: {
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
                         .fill(Theme.accent.opacity(0.12))
                         .frame(width: 42, height: 42)
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
                         .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
                         .frame(width: 42, height: 42)
                     Image(systemName: icon)
@@ -415,14 +415,7 @@ private struct AnalyticsCard<Destination: View>: View {
                     .foregroundColor(Theme.textTertiary)
             }
             .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Theme.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Theme.hairline, lineWidth: 1)
-            )
+            .bracketPanel(.tile)
         }
         .buttonStyle(.plain)
         .fullScreenCover(isPresented: $showingFullScreen) {

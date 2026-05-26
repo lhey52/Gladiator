@@ -35,8 +35,7 @@ struct DashboardView: View {
                             deviceTip
                         }
                         header
-                        SummarySection(sessions: sessions)
-                        TypeBreakdownSection(sessions: sessions, onSelectType: onSelectType)
+                        OverviewSection(sessions: sessions, onSelectType: onSelectType)
                         ActivityChartSection(sessions: sessions)
                         RecentSessionsSection(sessions: Array(sessions.prefix(5)))
                         LatestNewsSection()
@@ -171,151 +170,141 @@ struct DashboardView: View {
     }
 }
 
-// MARK: - Summary
+// MARK: - Overview
 
-private struct SummarySection: View {
-    let sessions: [Session]
-
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "MMM dd · HH:mm"
-        return f
-    }()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("OVERVIEW", systemImage: "square.grid.2x2.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(1.5)
-                    .foregroundColor(Theme.accent)
-                Spacer()
-            }
-
-            HStack(alignment: .top, spacing: 14) {
-                totalTile
-                latestTile
-            }
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Theme.accent.opacity(0.35), lineWidth: 1)
-        )
-        .shadow(color: Theme.accent.opacity(0.18), radius: 18)
-    }
-
-    private var totalTile: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("TOTAL SESSIONS")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
-            Text("\(sessions.count)")
-                .font(.system(size: 54, weight: .heavy, design: .rounded))
-                .foregroundColor(Theme.textPrimary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private var latestTile: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("MOST RECENT")
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.5)
-                .foregroundColor(Theme.textSecondary)
-            if let latest = sessions.first {
-                Text(latest.trackName.isEmpty ? "Untitled Track" : latest.trackName)
-                    .font(.system(size: 17, weight: .heavy))
-                    .foregroundColor(Theme.textPrimary)
-                    .lineLimit(1)
-                Text(Self.dayFormatter.string(from: latest.date).uppercased())
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(1)
-                    .foregroundColor(Theme.accent)
-            } else {
-                Text("—")
-                    .font(.system(size: 32, weight: .heavy, design: .rounded))
-                    .foregroundColor(Theme.textTertiary)
-                Text("NO SESSIONS")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(1)
-                    .foregroundColor(Theme.textTertiary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-// MARK: - Type breakdown
-
-private struct TypeBreakdownSection: View {
+// Combined overview + type breakdown + most recent session. Total count
+// is the hero on the left; most-recent track/date sits compact on the
+// right of the same row. Per-type breakdown spans the full width below.
+// Every label and number is lineLimit(1) + minimumScaleFactor so the
+// section never wraps regardless of name length or count magnitude.
+private struct OverviewSection: View {
     let sessions: [Session]
     var onSelectType: ((SessionType) -> Void)?
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM dd"
+        return f
+    }()
 
     private func count(_ type: SessionType) -> Int {
         sessions.filter { $0.sessionType == type }.count
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("BY TYPE")
-                .font(.system(size: 11, weight: .bold))
-                .tracking(2)
-                .foregroundColor(Theme.textSecondary)
-                .padding(.leading, 4)
+        VStack(spacing: 12) {
+            HStack {
+                Text("OVERVIEW")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.8)
+                    .foregroundColor(Theme.accent)
+                Spacer()
+            }
 
-            HStack(spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                totalBlock
+                Spacer(minLength: 8)
+                recentBlock
+            }
+
+            Rectangle()
+                .fill(Theme.hairline)
+                .frame(height: 1)
+
+            HStack(spacing: 8) {
                 ForEach(SessionType.allCases) { type in
                     Button {
                         onSelectType?(type)
                     } label: {
-                        TypeTile(type: type, count: count(type))
+                        OverviewTypeChip(type: type, count: count(type))
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
+        .padding(14)
+        .squarePanel()
+    }
+
+    private var totalBlock: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("\(sessions.count)")
+                .font(.system(size: 38, weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(Theme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text("TOTAL")
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+                .lineLimit(1)
+        }
+        .layoutPriority(1)
+    }
+
+    @ViewBuilder
+    private var recentBlock: some View {
+        if let latest = sessions.first {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("MOST RECENT")
+                    .font(.system(size: 8, weight: .heavy))
+                    .tracking(1.4)
+                    .foregroundColor(Theme.textTertiary)
+                    .lineLimit(1)
+                Text(latest.trackName.isEmpty ? "Untitled" : latest.trackName)
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundColor(Theme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
+                    .truncationMode(.tail)
+                Text(Self.dateFormatter.string(from: latest.date).uppercased())
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(0.8)
+                    .foregroundColor(Theme.accent)
+                    .lineLimit(1)
+            }
+        } else {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("MOST RECENT")
+                    .font(.system(size: 8, weight: .heavy))
+                    .tracking(1.4)
+                    .foregroundColor(Theme.textTertiary)
+                    .lineLimit(1)
+                Text("—")
+                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    .foregroundColor(Theme.textTertiary)
+                Text("NO SESSIONS")
+                    .font(.system(size: 9, weight: .heavy))
+                    .tracking(0.8)
+                    .foregroundColor(Theme.textTertiary)
+                    .lineLimit(1)
+            }
+        }
     }
 }
 
-private struct TypeTile: View {
+private struct OverviewTypeChip: View {
     let type: SessionType
     let count: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: type.systemImage)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Theme.accent)
-                Spacer()
-                Text(type.shortLabel)
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(1)
-                    .foregroundColor(Theme.textTertiary)
-            }
+        VStack(spacing: 3) {
             Text("\(count)")
-                .font(.system(size: 32, weight: .heavy, design: .rounded))
+                .font(.system(size: 20, weight: .heavy, design: .rounded))
+                .monospacedDigit()
                 .foregroundColor(Theme.textPrimary)
-            Text(type.rawValue.uppercased())
-                .font(.system(size: 9, weight: .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(type.shortLabel)
+                .font(.system(size: 9, weight: .heavy))
                 .tracking(1.2)
                 .foregroundColor(Theme.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
     }
 }
 
@@ -387,13 +376,7 @@ private struct ActivityChartSection: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
+        .squarePanel()
     }
 
     private var chart: some View {
@@ -467,9 +450,7 @@ private struct RecentSessionsSection: View {
             .foregroundColor(Theme.textTertiary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 28)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
-            )
+            .squarePanel()
     }
 
     private var list: some View {
@@ -489,9 +470,8 @@ private struct RecentSessionsSection: View {
                 }
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.surface)
-        )
+        .squarePanel()
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
     }
 }
 
@@ -604,13 +584,7 @@ private struct LatestNewsSection: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
+        .squarePanel()
     }
 
     private var loadingCard: some View {
@@ -622,13 +596,7 @@ private struct LatestNewsSection: View {
         }
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
+        .squarePanel()
     }
 
     private var list: some View {
@@ -645,8 +613,8 @@ private struct LatestNewsSection: View {
                 }
             }
         }
-        .background(Theme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .squarePanel()
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
     }
 }
 
