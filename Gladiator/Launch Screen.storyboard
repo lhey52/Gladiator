@@ -22,10 +22,10 @@
                                 <nil key="highlightedColor"/>
                             </label>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="SplashLogo" translatesAutoresizingMaskIntoConstraints="NO" id="JAr-rE-yBh">
-                                <rect key="frame" x="125.66666666666669" y="358.66666666666669" width="142" height="185.00000000000006"/>
+                                <rect key="frame" x="136" y="347.5" width="121" height="157"/>
                                 <constraints>
-                                    <constraint firstAttribute="height" constant="185" id="JAr-ht-002"/>
-                                    <constraint firstAttribute="width" constant="142" id="JAr-wd-001"/>
+                                    <constraint firstAttribute="height" constant="157" id="JAr-ht-002"/>
+                                    <constraint firstAttribute="width" constant="121" id="JAr-wd-001"/>
                                 </constraints>
                             </imageView>
                         </subviews>

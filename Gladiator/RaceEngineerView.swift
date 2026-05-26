@@ -301,10 +301,7 @@ struct RaceEngineerView: View {
             dataSufficiencyRow(analysis: analysis)
             sliderCard(analysis: analysis)
             if let panel = panelCache {
-                HStack(alignment: .top, spacing: 10) {
-                    comparisonPanel(side: .lower, analysis: analysis, panel: panel)
-                    comparisonPanel(side: .higher, analysis: analysis, panel: panel)
-                }
+                combinedComparisonCard(analysis: analysis, panel: panel)
             }
         }
     }
@@ -575,40 +572,24 @@ struct RaceEngineerView: View {
         return segments
     }
 
-    // MARK: - Panel
+    // MARK: - Combined comparison card
 
-    private func comparisonPanel(
-        side: PanelSide,
-        analysis: AnalysisCache,
-        panel: PanelCache
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("SESSION AVERAGES")
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(1.5)
-                    .foregroundColor(Theme.textSecondary)
-                outcomeRow(side: side, analysis: analysis, panel: panel)
-            }
-
-            if !panel.fieldOrder.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(panel.fieldOrder.enumerated()), id: \.element) { index, fieldName in
-                        metricRow(
-                            fieldName: fieldName,
-                            side: side,
-                            analysis: analysis,
-                            panel: panel
-                        )
-                        if index < panel.fieldOrder.count - 1 {
-                            Divider().background(Theme.hairline)
-                        }
-                    }
-                }
+    // Single card laying out both buckets side by side, row by row. Mirrors
+    // Session Comparison's resultsCard: a tinted header strip, then one row
+    // per metric with the field name shared on top of two flanking values
+    // separated by a hairline divider. The outcome row is kept visually
+    // distinct (subtle accent-tinted background, larger orange values) so
+    // it doesn't blend in with the regular contributor rows.
+    private func combinedComparisonCard(analysis: AnalysisCache, panel: PanelCache) -> some View {
+        VStack(spacing: 0) {
+            combinedHeader(panel: panel)
+            outcomeComparisonRow(analysis: analysis, panel: panel)
+            ForEach(panel.fieldOrder, id: \.self) { fieldName in
+                Divider().background(Theme.hairline)
+                metricComparisonRow(fieldName: fieldName, analysis: analysis, panel: panel)
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
         )
@@ -618,75 +599,112 @@ struct RaceEngineerView: View {
         )
     }
 
-    private func outcomeRow(side: PanelSide, analysis: AnalysisCache, panel: PanelCache) -> some View {
-        let avg = side == .lower ? panel.leftOutcomeAvg : panel.rightOutcomeAvg
-        return VStack(alignment: .leading, spacing: 4) {
+    private func combinedHeader(panel: PanelCache) -> some View {
+        let lowerCount = panel.splitIndex
+        let higherCount = panel.totalSessions - panel.splitIndex
+        return HStack {
+            Text("LOWEST")
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1)
+                .foregroundColor(Theme.accent)
+            Spacer()
+            Text("\(lowerCount) vs \(higherCount) sessions")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(Theme.textTertiary)
+                .monospacedDigit()
+            Spacer()
+            Text("HIGHEST")
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1)
+                .foregroundColor(Theme.accent)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Theme.surfaceElevated)
+    }
+
+    private func outcomeComparisonRow(analysis: AnalysisCache, panel: PanelCache) -> some View {
+        let leftAvg = panel.leftOutcomeAvg
+        let rightAvg = panel.rightOutcomeAvg
+        let leftDisplay = leftAvg.map { formatValue($0, fieldType: analysis.outcomeFieldType) } ?? "—"
+        let rightDisplay = rightAvg.map { formatValue($0, fieldType: analysis.outcomeFieldType) } ?? "—"
+        return VStack(spacing: 8) {
             Text(analysis.outcome.uppercased())
-                .font(.system(size: 9, weight: .heavy))
-                .tracking(1.2)
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.5)
                 .foregroundColor(Theme.accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-            if let avg {
-                Text(formatValue(avg, fieldType: analysis.outcomeFieldType))
-                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-                    .foregroundColor(Theme.accent)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-            } else {
-                Text("—")
-                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-                    .foregroundColor(Theme.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+            HStack {
+                outcomeValueText(leftDisplay, missing: leftAvg == nil)
+                    .frame(maxWidth: .infinity)
+                Rectangle()
+                    .fill(Theme.hairline)
+                    .frame(width: 1, height: 32)
+                outcomeValueText(rightDisplay, missing: rightAvg == nil)
+                    .frame(maxWidth: .infinity)
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
-    private func metricRow(
-        fieldName: String,
-        side: PanelSide,
-        analysis: AnalysisCache,
-        panel: PanelCache
-    ) -> some View {
-        let avg = side == .lower ? panel.leftAverages[fieldName] : panel.rightAverages[fieldName]
+    private func outcomeValueText(_ text: String, missing: Bool) -> some View {
+        Text(text)
+            .font(.system(size: 24, weight: .heavy, design: .rounded))
+            .foregroundColor(missing ? Theme.textTertiary : Theme.accent)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+    }
+
+    private func metricComparisonRow(fieldName: String, analysis: AnalysisCache, panel: PanelCache) -> some View {
+        let leftAvg = panel.leftAverages[fieldName]
+        let rightAvg = panel.rightAverages[fieldName]
         let fieldType = analysis.fieldTypes[fieldName] ?? .number
-        let display = avg.map { formatValue($0, fieldType: fieldType) } ?? "—"
-        let direction = direction(forFieldName: fieldName, side: side, panel: panel)
-
-        return VStack(alignment: .leading, spacing: 3) {
+        let leftDisplay = leftAvg.map { formatValue($0, fieldType: fieldType) } ?? "—"
+        let rightDisplay = rightAvg.map { formatValue($0, fieldType: fieldType) } ?? "—"
+        let (leftDir, rightDir) = directions(leftAvg: leftAvg, rightAvg: rightAvg)
+        return VStack(spacing: 8) {
             Text(fieldName.uppercased())
-                .font(.system(size: 9, weight: .heavy))
-                .tracking(1)
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.5)
                 .foregroundColor(Theme.textSecondary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.7)
-            HStack(spacing: 4) {
-                Text(display)
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
-                    .foregroundColor(avg == nil ? Theme.textTertiary : Theme.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                directionGlyph(direction)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity, alignment: .center)
+            HStack {
+                metricValueText(leftDisplay, direction: leftDir, missing: leftAvg == nil)
+                    .frame(maxWidth: .infinity)
+                Rectangle()
+                    .fill(Theme.hairline)
+                    .frame(width: 1, height: 28)
+                metricValueText(rightDisplay, direction: rightDir, missing: rightAvg == nil)
+                    .frame(maxWidth: .infinity)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
-    // .up if this panel's average is higher than the other panel's, .down
-    // if lower, .none if the other side is missing a value or the two
-    // averages are equal.
-    private func direction(forFieldName name: String, side: PanelSide, panel: PanelCache) -> DirectionState {
-        guard let left = panel.leftAverages[name],
-              let right = panel.rightAverages[name] else {
-            return .none
+    private func metricValueText(_ text: String, direction: DirectionState, missing: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(text)
+                .font(.system(size: 20, weight: .heavy, design: .rounded))
+                .foregroundColor(missing ? Theme.textTertiary : Theme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            directionGlyph(direction)
         }
-        if abs(left - right) < 1e-9 { return .none }
-        let thisSideHigher: Bool
-        switch side {
-        case .lower: thisSideHigher = left > right
-        case .higher: thisSideHigher = right > left
-        }
-        return thisSideHigher ? .up : .down
+    }
+
+    // Returns (leftDirection, rightDirection) — .up on whichever side has
+    // the higher average, .down on the other, both .none if either value
+    // is missing or the two are equal.
+    private func directions(leftAvg: Double?, rightAvg: Double?) -> (DirectionState, DirectionState) {
+        guard let left = leftAvg, let right = rightAvg else { return (.none, .none) }
+        if abs(left - right) < 1e-9 { return (.none, .none) }
+        return left > right ? (.up, .down) : (.down, .up)
     }
 
     @ViewBuilder
@@ -701,9 +719,7 @@ struct RaceEngineerView: View {
                 .font(.system(size: 10, weight: .heavy))
                 .foregroundColor(Theme.danger)
         case .none:
-            Image(systemName: "minus")
-                .font(.system(size: 10, weight: .heavy))
-                .foregroundColor(Theme.textTertiary)
+            EmptyView()
         }
     }
 
@@ -867,10 +883,6 @@ struct RaceEngineerView: View {
 }
 
 // MARK: - Snapshots and caches
-
-private enum PanelSide {
-    case lower, higher
-}
 
 private enum DirectionState {
     case up, down, none
