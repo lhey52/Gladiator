@@ -108,7 +108,7 @@ struct PaywallView: View {
     private var featuresSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             featureRow("sparkles", "AI Insights & Recommendations")
-            featureRow("function", "Correlation Analysis & Other Pro Analytics Tools")
+            featureRow("function", "Race Engineer Tool")
             featureRow("square.and.arrow.up", "Export & Share Data with Other Drivers")
             featureRow("infinity", "Unlimited Data Storage")
             featureRow("clock.badge.checkmark", "7-Day Free Trial — Cancel Anytime")

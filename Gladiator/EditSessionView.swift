@@ -6,8 +6,18 @@
 import SwiftUI
 import SwiftData
 
-private enum EditSessionField: Hashable {
+private let editSessionCoordSpace = "edit-session"
+
+private struct EditSessionFieldFramesKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+private enum SessionFormField: Hashable {
     case notes
+    case metricText(String)
 }
 
 struct EditSessionView: View {
@@ -21,10 +31,14 @@ struct EditSessionView: View {
     private var vehicles: [Vehicle]
 
     let session: Session
+    // Invoked only on an actual save so the presenter can show its "Session
+    // Saved" toast — Cancel just dismisses without firing this.
+    var onSaved: () -> Void = {}
 
     @AppStorage("sessionFormTipDismissed") private var tipDismissed: Bool = false
     @AppStorage("sessionProgressBarEnabled") private var progressBarEnabled: Bool = true
     @AppStorage(VehicleStyle.storageKey) private var vehicleStyleRaw: String = VehicleStyle.lateModel.rawValue
+    @AppStorage("disabledSetupZones") private var disabledZonesRaw: String = "Engine"
 
     private var vehicleStyle: VehicleStyle {
         VehicleStyle(rawValue: vehicleStyleRaw) ?? .lateModel
@@ -35,19 +49,39 @@ struct EditSessionView: View {
     @State private var sessionType: SessionType = .practice
     @State private var notes: String = ""
     @State private var fieldEntries: [String: String] = [:]
-    @State private var activeZone: CarZone?
-    @State private var pitSheetPresented: Bool = false
-    @FocusState private var focusedField: EditSessionField?
+    @State private var expandedZone: CarZone?
+    @State private var activeNumberField: String?
+    @State private var fieldFrames: [String: CGRect] = [:]
+    @State private var showingAddTrack: Bool = false
+    @State private var showingAddVehicle: Bool = false
+    @Namespace private var zoneNamespace
+    @State private var isPitBoxExpanded: Bool = false
+    @State private var didLoad: Bool = false
+    @FocusState private var focusedField: SessionFormField?
 
     private var canSave: Bool {
         !trackName.isEmpty
     }
 
-    private var allFields: [EditSessionField] {
-        // Only the inline notes editor is focusable on the form root —
-        // metric inputs live inside the zone and pit-box sheets and have
-        // their own focus state.
-        [.notes]
+    private var allFields: [SessionFormField] {
+        // While a zone is expanded, the chevrons walk only that zone's
+        // text fields so focus doesn't jump out of the focused card. In
+        // the resting state, session text fields walk into Notes.
+        if let zone = expandedZone {
+            return customFields
+                .filter { $0.zone == zone && $0.fieldType == .text }
+                .map { .metricText($0.name) }
+        }
+        var fields: [SessionFormField] = generalFields
+            .filter { $0.fieldType == .text }
+            .map { .metricText($0.name) }
+        fields.append(.notes)
+        return fields
+    }
+
+    private var expandedZoneFields: [CustomField] {
+        guard let zone = expandedZone else { return [] }
+        return customFields.filter { $0.zone == zone }
     }
 
     private var generalFields: [CustomField] {
@@ -66,6 +100,20 @@ struct EditSessionView: View {
         return result
     }
 
+    // Fill state for the Pit Box affordance so it tints / borders / glows
+    // with the same logic as the diagram zones. Slots are Track + Vehicle
+    // plus every General metric — Date and Session Type always carry a
+    // value so they'd only inflate the count, mirroring how the zones count
+    // only user-entered metrics.
+    private var pitBoxState: ZoneFillState {
+        var filled = 0
+        if !trackName.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        if !vehicleName.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        let generals = generalFields
+        for field in generals where isFieldFilled(field) { filled += 1 }
+        return ZoneFillState(filled: filled, total: 2 + generals.count)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -77,39 +125,131 @@ struct EditSessionView: View {
                     }
                     formScroll
                 }
+
+                if expandedZone != nil {
+                    Color.black.opacity(0.65)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                        .onTapGesture { collapseExpandedZone() }
+                }
+
+                if let zone = expandedZone {
+                    expandedZoneCard(zone: zone)
+                        .matchedGeometryEffect(id: zone, in: zoneNamespace, isSource: true)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 60)
+                }
+
+                if isPitBoxExpanded {
+                    Color.black.opacity(0.65)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                        .onTapGesture { collapsePitBox() }
+                }
+
+                if isPitBoxExpanded {
+                    expandedPitBoxCard
+                        .matchedGeometryEffect(id: Self.pitBoxMatchID, in: zoneNamespace, isSource: true)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 60)
+                }
+
+                if let activeName = activeNumberField,
+                   let field = customFields.first(where: { $0.name == activeName }),
+                   let frame = fieldFrames[activeName] {
+                    NumberPadBubbleOverlay(
+                        anchorFrame: frame,
+                        text: bindingForField(field),
+                        onDismiss: { activeNumberField = nil },
+                        onNext: nextNumberField(after: activeName).map { nextField in
+                            { activeNumberField = nextField.name }
+                        }
+                    )
+                    .transition(.opacity)
+                }
             }
+            .coordinateSpace(name: editSessionCoordSpace)
+            .onPreferenceChange(EditSessionFieldFramesKey.self) { fieldFrames = $0 }
             .navigationTitle("Edit Session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { navToolbar }
             .keyboardToolbar(focusedField: $focusedField, fields: allFields)
+            .sheet(isPresented: $showingAddTrack) {
+                NavigationStack { TracksView() }
+                    .preferredColorScheme(.dark)
+            }
+            .sheet(isPresented: $showingAddVehicle) {
+                NavigationStack { VehicleView() }
+                    .preferredColorScheme(.dark)
+            }
         }
         .preferredColorScheme(.dark)
-        .sheet(item: $activeZone) { zone in
-            ZoneMetricsSheet(
-                zone: zone,
-                fields: customFields.filter { $0.zone == zone },
-                entries: $fieldEntries,
-                onClose: { activeZone = nil }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+        .onAppear {
+            if !didLoad {
+                didLoad = true
+                loadSession()
+            }
         }
-        .sheet(isPresented: $pitSheetPresented) {
-            PitInfoSheet(
-                date: $date,
-                trackName: $trackName,
-                vehicleName: $vehicleName,
-                sessionType: $sessionType,
-                tracks: tracks,
-                vehicles: vehicles,
-                generalFields: generalFields,
-                entries: $fieldEntries,
-                onClose: { pitSheetPresented = false }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+    }
+
+    private func collapseExpandedZone() {
+        focusedField = nil
+        activeNumberField = nil
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+            expandedZone = nil
         }
-        .onAppear { loadSession() }
+    }
+
+    private func collapsePitBox() {
+        focusedField = nil
+        activeNumberField = nil
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+            isPitBoxExpanded = false
+        }
+    }
+
+    // Walk-around-the-car order for prev/next navigation. Wraps in both
+    // directions so users can keep stepping forward without thinking
+    // about edges.
+    private static let baseZoneNavigationOrder: [CarZone] = [
+        .flTire, .frTire, .chassis, .engine, .blTire, .brTire
+    ]
+
+    // Skip zones the user has hidden in Settings → Setup Zones so the
+    // chevron walk only steps through visible zones on the diagram.
+    private var zoneNavigationOrder: [CarZone] {
+        let disabled = Set(disabledZonesRaw.split(separator: ",").map(String.init))
+        return Self.baseZoneNavigationOrder.filter { !disabled.contains($0.rawValue) }
+    }
+
+    private func zoneNeighbor(of zone: CarZone, offset: Int) -> CarZone {
+        let order = zoneNavigationOrder
+        guard let idx = order.firstIndex(of: zone), !order.isEmpty else { return zone }
+        let count = order.count
+        let target = ((idx + offset) % count + count) % count
+        return order[target]
+    }
+
+    private func navigateZone(by offset: Int) {
+        guard let current = expandedZone else { return }
+        let target = zoneNeighbor(of: current, offset: offset)
+        focusedField = nil
+        activeNumberField = nil
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+            expandedZone = target
+        }
+    }
+
+    // Cycle within a zone's number metrics for the number-pad "Next"
+    // button. Returns nil if the zone has only one number metric — the
+    // pad hides Next in that case.
+    private func nextNumberField(after fieldName: String) -> CustomField? {
+        guard let current = customFields.first(where: { $0.name == fieldName }) else { return nil }
+        let zoneNumberFields = customFields.filter { $0.zone == current.zone && $0.fieldType == .number }
+        guard zoneNumberFields.count > 1 else { return nil }
+        guard let idx = zoneNumberFields.firstIndex(where: { $0.name == fieldName }) else { return nil }
+        let nextIdx = (idx + 1) % zoneNumberFields.count
+        return zoneNumberFields[nextIdx]
     }
 
     private func isFieldFilled(_ field: CustomField) -> Bool {
@@ -160,14 +300,14 @@ struct EditSessionView: View {
     private var formScroll: some View {
         ScrollView {
             VStack(spacing: 18) {
-                raceCarSection
                 if !tipDismissed {
                     sessionFormTip
                 }
-                notesCard
+                raceCarSection
             }
             .padding(20)
         }
+        .scrollDisabled(activeNumberField != nil)
     }
 
     private var sessionFormTip: some View {
@@ -218,60 +358,27 @@ struct EditSessionView: View {
 
     private var raceCarSection: some View {
         VStack(spacing: 0) {
-            cardHeader("ZONES")
+            cardHeader("SETUP")
             pitBoxElement
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
             RaceCarDiagramView(
                 zoneStates: zoneStates,
+                expandedZone: expandedZone,
+                matchedNamespace: zoneNamespace,
                 style: vehicleStyle,
                 onTapZone: { zone in
                     focusedField = nil
-                    activeZone = zone
+                    activeNumberField = nil
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                        expandedZone = zone
+                    }
                 }
             )
             .padding(.horizontal, 12)
             .padding(.bottom, 14)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
-        )
-    }
-
-    private var pitBoxElement: some View {
-        Button {
-            focusedField = nil
-            pitSheetPresented = true
-        } label: {
-            VStack(spacing: 2) {
-                Text("PIT BOX")
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(1.8)
-                    .foregroundColor(Theme.accent)
-                Text("TRACK · VEHICLE · GENERAL")
-                    .font(.system(size: 8, weight: .heavy))
-                    .tracking(1.2)
-                    .foregroundColor(Theme.textSecondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 18)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Theme.accent.opacity(0.10))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Theme.accent.opacity(0.50), lineWidth: 1.5)
-            )
-            .shadow(color: Theme.accent.opacity(0.20), radius: 6)
-        }
-        .buttonStyle(.plain)
+        .squarePanel()
     }
 
     private func cardHeader(_ text: String) -> some View {
@@ -287,42 +394,413 @@ struct EditSessionView: View {
         .padding(.bottom, 10)
     }
 
-    // MARK: - Notes card
+    // MARK: - Pit Box (Session + Notes)
 
-    private var notesCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("NOTES")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.8)
-                .foregroundColor(Theme.accent)
+    // Static match id reused across the resting button and the expanded
+    // card so the pop-up rides the same matchedGeometryEffect spring as the
+    // car-diagram zones — just keyed by a String instead of a CarZone.
+    private static let pitBoxMatchID = "pit-box"
 
-            ZStack(alignment: .topLeading) {
-                if notes.isEmpty {
-                    Text("Setup, conditions, thoughts…")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Theme.textTertiary)
-                        .padding(.top, 8)
-                        .padding(.leading, 4)
-                        .allowsHitTesting(false)
-                }
-                TextEditor(text: $notes)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(Theme.textPrimary)
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 120)
-                    .focused($focusedField, equals: .notes)
+    // The affordance that sits above the car outline. Tapping it pops the
+    // session info + notes up in the same dim-backdrop / orange-bordered
+    // floating card the zones use, rather than a sheet.
+    private var pitBoxElement: some View {
+        let state = pitBoxState
+        return Button {
+            focusedField = nil
+            activeNumberField = nil
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                isPitBoxExpanded = true
             }
+        } label: {
+            VStack(spacing: 3) {
+                Text("PIT BOX")
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.8)
+                    .foregroundColor(state.hasMetrics ? Theme.accent : Theme.textTertiary)
+                Text("TYPE · TRACK · VEHICLE · NOTES")
+                    .font(.system(size: 8, weight: .heavy))
+                    .tracking(1.2)
+                    .foregroundColor(Theme.textSecondary)
+                if state.hasMetrics {
+                    pitBoxCounterPill(state: state)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 18)
+            .background {
+                if state.hasMetrics {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(
+                            // Match a diagram zone's tone: ZoneCell only shows a
+                            // thin slice of the car-length chassis gradient, so each
+                            // zone reads as a near-uniform ~7% white. Extending the
+                            // gradient line well past the box reproduces that slice
+                            // here instead of the full 0.04→0.10 range, which read
+                            // darker at the top than the surrounding zones.
+                            LinearGradient(
+                                colors: [Theme.chassisFillTop, Theme.chassisFillBottom],
+                                startPoint: UnitPoint(x: 0.5, y: -3),
+                                endPoint: UnitPoint(x: 0.5, y: 3)
+                            )
+                        )
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(
+                            state.filled > 0 ? Theme.accent : Theme.chassisLine,
+                            lineWidth: state.filled > 0 ? 1.5 : 1
+                        )
+                }
+            }
+            .shadow(
+                color: state.isComplete ? Theme.accent.opacity(0.55) : .clear,
+                radius: state.hasMetrics ? 10 : 0
+            )
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .buttonStyle(.plain)
+        .matchedGeometryEffect(id: Self.pitBoxMatchID, in: zoneNamespace, isSource: !isPitBoxExpanded)
+        .opacity(isPitBoxExpanded ? 0 : 1)
+    }
+
+    // Mirrors RaceCarDiagramView's per-zone counter pill so the Pit Box
+    // reads as one of the zones.
+    private func pitBoxCounterPill(state: ZoneFillState) -> some View {
+        Text("\(state.filled)/\(state.total)")
+            .font(.system(size: 9, weight: .heavy))
+            .foregroundColor(state.isComplete ? Theme.accent : Theme.textSecondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(state.isComplete ? Theme.accent.opacity(0.22) : Theme.surface.opacity(0.7))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(state.isComplete ? Theme.accent.opacity(0.6) : Theme.hairline, lineWidth: 1)
+            )
+    }
+
+    // Floating card shown while the pit box is expanded. Mirrors the chrome
+    // and animation of `expandedZoneCard` (surface fill, orange border,
+    // corner 22) but carries the session fields + notes instead of a zone's
+    // metrics.
+    private var expandedPitBoxCard: some View {
+        VStack(spacing: 0) {
+            expandedPitBoxHeader
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    sessionFields
+                    Divider()
+                        .background(Theme.hairline)
+                        .padding(.vertical, 8)
+                    Text("NOTES")
+                        .font(.system(size: 10, weight: .heavy))
+                        .tracking(1.5)
+                        .foregroundColor(Theme.accent)
+                        .padding(.bottom, 8)
+                    notesEditor
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            }
+            .scrollDisabled(activeNumberField != nil)
+        }
+        .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Theme.surface)
+            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.surface)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Theme.hairline, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Theme.accent.opacity(0.55), lineWidth: 1.5)
         )
+    }
+
+    private var expandedPitBoxHeader: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SETUP")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+                Text("PIT BOX")
+                    .font(.system(size: 22, weight: .heavy))
+                    .tracking(1.2)
+                    .foregroundColor(Theme.accent)
+            }
+            Spacer()
+            Button(action: collapsePitBox) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .heavy))
+                    .foregroundColor(Theme.accent)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle().fill(Theme.surfaceElevated)
+                    )
+                    .overlay(
+                        Circle().stroke(Theme.accent.opacity(0.45), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close pit box")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 12)
+    }
+
+    private var sessionFields: some View {
+        VStack(spacing: 0) {
+            typeChips
+                .padding(.bottom, 6)
+            infoRow(label: "TRACK") {
+                trackMenu
+            }
+            infoRow(label: "VEHICLE") {
+                vehicleMenu
+            }
+            infoRow(label: "DATE") {
+                DatePicker(
+                    "",
+                    selection: $date,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .tint(Theme.accent)
+                .colorScheme(.dark)
+            }
+            ForEach(generalFields) { field in
+                metricRow(field: field)
+            }
+        }
+    }
+
+    // Track / Vehicle dropdowns are custom Menus rather than SwiftUI
+    // Pickers because Picker can't host an arbitrary "Add New" Button at
+    // the bottom — the Menu-based form lets the driver jump straight to
+    // the customization view to add a missing entry without losing the
+    // session draft (the new sheet sits on top, the @Query auto-refreshes
+    // when it dismisses).
+    private var trackMenu: some View {
+        Menu {
+            ForEach(tracks) { track in
+                Button {
+                    trackName = track.name
+                } label: {
+                    if trackName == track.name {
+                        Label(track.name, systemImage: "checkmark")
+                    } else {
+                        Text(track.name)
+                    }
+                }
+            }
+            Button {
+                showingAddTrack = true
+            } label: {
+                Label("Add New", systemImage: "plus.circle")
+            }
+        } label: {
+            menuLabel(
+                placeholder: "Select Track",
+                value: trackName
+            )
+        }
+    }
+
+    private var vehicleMenu: some View {
+        Menu {
+            ForEach(vehicles) { vehicle in
+                Button {
+                    vehicleName = vehicle.name
+                } label: {
+                    if vehicleName == vehicle.name {
+                        Label(vehicle.name, systemImage: "checkmark")
+                    } else {
+                        Text(vehicle.name)
+                    }
+                }
+            }
+            Button {
+                showingAddVehicle = true
+            } label: {
+                Label("Add New", systemImage: "plus.circle")
+            }
+        } label: {
+            menuLabel(
+                placeholder: "Select Vehicle",
+                value: vehicleName
+            )
+        }
+    }
+
+    private func menuLabel(placeholder: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Text(value.isEmpty ? placeholder : value)
+                .foregroundColor(value.isEmpty ? Theme.textTertiary : Theme.accent)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Theme.accent)
+        }
+    }
+
+    private var typeChips: some View {
+        HStack(spacing: 8) {
+            ForEach(SessionType.allCases) { type in
+                typeChip(type)
+            }
+        }
+    }
+
+    private func typeChip(_ type: SessionType) -> some View {
+        let isSelected = sessionType == type
+        return Button {
+            sessionType = type
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: type.systemImage)
+                    .font(.system(size: 11, weight: .bold))
+                Text(type.shortLabel)
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                    .allowsTightening(true)
+            }
+            .foregroundColor(isSelected ? Theme.accent : Theme.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                Capsule().fill(isSelected ? Theme.accent.opacity(0.15) : Theme.surface)
+            )
+            .overlay(
+                Capsule().stroke(isSelected ? Theme.accent.opacity(0.5) : Theme.hairline, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func infoRow<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+            Spacer()
+            content()
+        }
+        .padding(.vertical, 12)
+    }
+
+    private func metricRow(field: CustomField) -> some View {
+        // Strip the zone prefix from the stored name before splitting so
+        // a metric that's saved as "FL Cold Tire Pressure (PSI)" reads
+        // as "Cold Tire Pressure" inside the FL Tire zone interface.
+        // General fields (no prefix) flow through unchanged.
+        let parts = CustomField.split(
+            name: CustomField.stripPrefix(from: field.name, zone: field.zone)
+        )
+        return HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(parts.name.uppercased())
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+                if !parts.unit.isEmpty {
+                    Text(parts.unit)
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundColor(Theme.textTertiary)
+                }
+            }
+            Spacer()
+            metricInput(field: field)
+        }
+        .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private func metricInput(field: CustomField) -> some View {
+        switch field.fieldType {
+        case .time:
+            let timeBinding = Binding<Double>(
+                get: { Double(fieldEntries[field.name, default: ""]) ?? 0 },
+                set: { fieldEntries[field.name] = String($0) }
+            )
+            TimePickerInput(totalSeconds: timeBinding)
+        case .text:
+            TextField(
+                "",
+                text: bindingForField(field),
+                prompt: Text("Enter text").foregroundColor(Theme.textTertiary)
+            )
+            .font(.system(size: 15, weight: .heavy))
+            .foregroundColor(Theme.textPrimary)
+            .keyboardType(.default)
+            .multilineTextAlignment(.trailing)
+            .autocorrectionDisabled()
+            .focused($focusedField, equals: .metricText(field.name))
+        case .number:
+            numberFieldButton(field: field)
+        }
+    }
+
+    private func numberFieldButton(field: CustomField) -> some View {
+        let raw = fieldEntries[field.name, default: ""]
+        let isActive = activeNumberField == field.name
+        return Button {
+            focusedField = nil
+            activeNumberField = field.name
+        } label: {
+            Text(raw.isEmpty ? "Enter number" : raw)
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundColor(raw.isEmpty ? Theme.textTertiary : Theme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(minWidth: 80, alignment: .trailing)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isActive ? Theme.accent.opacity(0.15) : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(
+                            isActive ? Theme.accent.opacity(0.6) : Theme.hairline,
+                            lineWidth: 1
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .preference(
+                        key: EditSessionFieldFramesKey.self,
+                        value: [field.name: geo.frame(in: .named(editSessionCoordSpace))]
+                    )
+            }
+        )
+    }
+
+    private var notesEditor: some View {
+        ZStack(alignment: .topLeading) {
+            if notes.isEmpty {
+                Text("Setup, conditions, thoughts…")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Theme.textTertiary)
+                    .padding(.top, 8)
+                    .padding(.leading, 4)
+                    .allowsHitTesting(false)
+            }
+            TextEditor(text: $notes)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 120)
+                .focused($focusedField, equals: .notes)
+        }
     }
 
     private func bindingForField(_ field: CustomField) -> Binding<String> {
@@ -330,6 +808,143 @@ struct EditSessionView: View {
             get: { fieldEntries[field.name, default: ""] },
             set: { fieldEntries[field.name] = $0 }
         )
+    }
+
+    // MARK: - Expanded zone card
+
+    private func expandedZoneCard(zone: CarZone) -> some View {
+        VStack(spacing: 0) {
+            expandedZoneHeader(zone: zone)
+            if expandedZoneFields.isEmpty {
+                expandedZoneEmptyState(zone: zone)
+            } else {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(expandedZoneFields) { field in
+                            metricRow(field: field)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                }
+                .scrollDisabled(activeNumberField != nil)
+            }
+            expandedZoneFooter
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Theme.accent.opacity(0.55), lineWidth: 1.5)
+        )
+    }
+
+    private var expandedZoneFooter: some View {
+        VStack(spacing: 8) {
+            Text("ZONE NAVIGATION")
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(1.5)
+                .foregroundColor(Theme.textSecondary)
+                .frame(maxWidth: .infinity)
+            HStack(spacing: 12) {
+                zoneNavButton(label: "PREVIOUS", systemImage: "chevron.left", isLeading: true) {
+                    navigateZone(by: -1)
+                }
+                zoneNavButton(label: "NEXT", systemImage: "chevron.right", isLeading: false) {
+                    navigateZone(by: 1)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 18)
+    }
+
+    private func zoneNavButton(
+        label: String,
+        systemImage: String,
+        isLeading: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if isLeading {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 11, weight: .heavy))
+                }
+                Text(label)
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.5)
+                if !isLeading {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 11, weight: .heavy))
+                }
+            }
+            .foregroundColor(Theme.accent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                Capsule().fill(Theme.surfaceElevated)
+            )
+            .overlay(
+                Capsule().stroke(Theme.accent.opacity(0.5), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func expandedZoneHeader(zone: CarZone) -> some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("ZONE")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+                Text(zone.displayName.uppercased())
+                    .font(.system(size: 22, weight: .heavy))
+                    .tracking(1.2)
+                    .foregroundColor(Theme.accent)
+            }
+            Spacer()
+            Button(action: collapseExpandedZone) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .heavy))
+                    .foregroundColor(Theme.accent)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle().fill(Theme.surfaceElevated)
+                    )
+                    .overlay(
+                        Circle().stroke(Theme.accent.opacity(0.45), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close zone")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 12)
+    }
+
+    private func expandedZoneEmptyState(zone: CarZone) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: "tray")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(Theme.textTertiary)
+            Text("NO METRICS IN THIS ZONE")
+                .font(.system(size: 12, weight: .heavy))
+                .tracking(1.6)
+                .foregroundColor(Theme.textSecondary)
+            Text("Assign metrics to \(zone.displayName) in Settings → Session Customization → Metrics")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Theme.textTertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
     }
 
     private func loadSession() {
@@ -362,6 +977,7 @@ struct EditSessionView: View {
             modelContext.insert(fv)
         }
 
+        onSaved()
         dismiss()
     }
 }

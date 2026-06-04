@@ -58,8 +58,7 @@ struct AddSessionView: View {
     @State private var toastIcon: String = ""
     @State private var toastText: String = ""
     @State private var showToast: Bool = false
-    @State private var isSessionExpanded: Bool = false
-    @State private var isNotesExpanded: Bool = false
+    @State private var isPitBoxExpanded: Bool = false
     @FocusState private var focusedField: SessionFormField?
 
     private var canSave: Bool {
@@ -103,6 +102,20 @@ struct AddSessionView: View {
         return result
     }
 
+    // Fill state for the Pit Box affordance so it tints / borders / glows
+    // with the same logic as the diagram zones. Slots are Track + Vehicle
+    // plus every General metric — Date and Session Type always carry a
+    // value so they'd only inflate the count, mirroring how the zones count
+    // only user-entered metrics.
+    private var pitBoxState: ZoneFillState {
+        var filled = 0
+        if !trackName.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        if !vehicleName.trimmingCharacters(in: .whitespaces).isEmpty { filled += 1 }
+        let generals = generalFields
+        for field in generals where isFieldFilled(field) { filled += 1 }
+        return ZoneFillState(filled: filled, total: 2 + generals.count)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -113,6 +126,7 @@ struct AddSessionView: View {
                         progressBar
                     }
                     formScroll
+                    limitBanner
                 }
 
                 if showToast {
@@ -135,6 +149,20 @@ struct AddSessionView: View {
                 if let zone = expandedZone {
                     expandedZoneCard(zone: zone)
                         .matchedGeometryEffect(id: zone, in: zoneNamespace, isSource: true)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 60)
+                }
+
+                if isPitBoxExpanded {
+                    Color.black.opacity(0.65)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                        .onTapGesture { collapsePitBox() }
+                }
+
+                if isPitBoxExpanded {
+                    expandedPitBoxCard
+                        .matchedGeometryEffect(id: Self.pitBoxMatchID, in: zoneNamespace, isSource: true)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 60)
                 }
@@ -188,9 +216,6 @@ struct AddSessionView: View {
                 didLoadDefault = true
                 loadDefaults()
             }
-            if !iap.checkSessionLimit(currentCount: sessions.count) {
-                showingPaywall = true
-            }
         }
     }
 
@@ -213,8 +238,7 @@ struct AddSessionView: View {
         sessionType = .practice
         notes = ""
         fieldEntries = [:]
-        isSessionExpanded = false
-        isNotesExpanded = false
+        isPitBoxExpanded = false
         loadDefaults()
     }
 
@@ -223,6 +247,14 @@ struct AddSessionView: View {
         activeNumberField = nil
         withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
             expandedZone = nil
+        }
+    }
+
+    private func collapsePitBox() {
+        focusedField = nil
+        activeNumberField = nil
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+            isPitBoxExpanded = false
         }
     }
 
@@ -325,10 +357,37 @@ struct AddSessionView: View {
         .animation(.easeInOut(duration: 0.25), value: completionProgress)
     }
 
+    // Bottom footnote shown when the driver is over the free session cap,
+    // mirroring the History tab's banner. The Save action keeps its own
+    // paywall guard — this is purely an in-page heads-up, not a gate.
+    @ViewBuilder
+    private var limitBanner: some View {
+        if iap.isAtSessionLimit(currentCount: sessions.count) {
+            Button { showingPaywall = true } label: {
+                HStack(spacing: 8) {
+                    Text("You've reached the free limit. Upgrade to Pro for unlimited sessions.")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.textSecondary)
+                    Text("Upgrade to Pro")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundColor(Theme.accent)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(Theme.surface)
+                .overlay(
+                    Rectangle().frame(height: 1).foregroundColor(Theme.hairline),
+                    alignment: .top
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     private var formScroll: some View {
         ScrollView {
             VStack(spacing: 18) {
-                setupCard
                 if !tipDismissed {
                     sessionFormTip
                 }
@@ -394,6 +453,9 @@ struct AddSessionView: View {
     private var raceCarSection: some View {
         VStack(spacing: 0) {
             cardHeader("SETUP")
+            pitBoxElement
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
             RaceCarDiagramView(
                 zoneStates: zoneStates,
                 expandedZone: expandedZone,
@@ -426,59 +488,158 @@ struct AddSessionView: View {
         .padding(.bottom, 10)
     }
 
-    // MARK: - Setup card (Session + Notes)
+    // MARK: - Pit Box (Session + Notes)
 
-    private var setupCard: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            sessionSection
-            Divider().background(Theme.hairline)
-            notesSection
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .squarePanel()
-    }
+    // Static match id reused across the resting button and the expanded
+    // card so the pop-up rides the same matchedGeometryEffect spring as the
+    // car-diagram zones — just keyed by a String instead of a CarZone.
+    private static let pitBoxMatchID = "pit-box"
 
-    private func collapsibleHeader(
-        title: String,
-        systemImage: String,
-        isExpanded: Bool,
-        toggle: @escaping () -> Void
-    ) -> some View {
-        Button(action: toggle) {
-            HStack {
-                Label(title, systemImage: systemImage)
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(1.5)
-                    .foregroundColor(Theme.accent)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .heavy))
-                    .foregroundColor(Theme.accent)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+    // The affordance that sits above the car outline. Tapping it pops the
+    // session info + notes up in the same dim-backdrop / orange-bordered
+    // floating card the zones use, rather than a sheet.
+    private var pitBoxElement: some View {
+        let state = pitBoxState
+        return Button {
+            focusedField = nil
+            activeNumberField = nil
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                isPitBoxExpanded = true
             }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var sessionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            collapsibleHeader(
-                title: "SESSION",
-                systemImage: "shippingbox.fill",
-                isExpanded: isSessionExpanded
-            ) {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    if isSessionExpanded { activeNumberField = nil }
-                    isSessionExpanded.toggle()
+        } label: {
+            VStack(spacing: 3) {
+                Text("PIT BOX")
+                    .font(.system(size: 11, weight: .heavy))
+                    .tracking(1.8)
+                    .foregroundColor(state.hasMetrics ? Theme.accent : Theme.textTertiary)
+                Text("TYPE · TRACK · VEHICLE · NOTES")
+                    .font(.system(size: 8, weight: .heavy))
+                    .tracking(1.2)
+                    .foregroundColor(Theme.textSecondary)
+                if state.hasMetrics {
+                    pitBoxCounterPill(state: state)
                 }
             }
-
-            if isSessionExpanded {
-                sessionFields
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 18)
+            .background {
+                if state.hasMetrics {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(
+                            // Match a diagram zone's tone: ZoneCell only shows a
+                            // thin slice of the car-length chassis gradient, so each
+                            // zone reads as a near-uniform ~7% white. Extending the
+                            // gradient line well past the box reproduces that slice
+                            // here instead of the full 0.04→0.10 range, which read
+                            // darker at the top than the surrounding zones.
+                            LinearGradient(
+                                colors: [Theme.chassisFillTop, Theme.chassisFillBottom],
+                                startPoint: UnitPoint(x: 0.5, y: -3),
+                                endPoint: UnitPoint(x: 0.5, y: 3)
+                            )
+                        )
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(
+                            state.filled > 0 ? Theme.accent : Theme.chassisLine,
+                            lineWidth: state.filled > 0 ? 1.5 : 1
+                        )
+                }
             }
+            .shadow(
+                color: state.isComplete ? Theme.accent.opacity(0.55) : .clear,
+                radius: state.hasMetrics ? 10 : 0
+            )
         }
+        .buttonStyle(.plain)
+        .matchedGeometryEffect(id: Self.pitBoxMatchID, in: zoneNamespace, isSource: !isPitBoxExpanded)
+        .opacity(isPitBoxExpanded ? 0 : 1)
+    }
+
+    // Mirrors RaceCarDiagramView's per-zone counter pill so the Pit Box
+    // reads as one of the zones.
+    private func pitBoxCounterPill(state: ZoneFillState) -> some View {
+        Text("\(state.filled)/\(state.total)")
+            .font(.system(size: 9, weight: .heavy))
+            .foregroundColor(state.isComplete ? Theme.accent : Theme.textSecondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(state.isComplete ? Theme.accent.opacity(0.22) : Theme.surface.opacity(0.7))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(state.isComplete ? Theme.accent.opacity(0.6) : Theme.hairline, lineWidth: 1)
+            )
+    }
+
+    // Floating card shown while the pit box is expanded. Mirrors the chrome
+    // and animation of `expandedZoneCard` (surface fill, orange border,
+    // corner 22) but carries the session fields + notes instead of a zone's
+    // metrics.
+    private var expandedPitBoxCard: some View {
+        VStack(spacing: 0) {
+            expandedPitBoxHeader
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    sessionFields
+                    Divider()
+                        .background(Theme.hairline)
+                        .padding(.vertical, 8)
+                    Text("NOTES")
+                        .font(.system(size: 10, weight: .heavy))
+                        .tracking(1.5)
+                        .foregroundColor(Theme.accent)
+                        .padding(.bottom, 8)
+                    notesEditor
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            }
+            .scrollDisabled(activeNumberField != nil)
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Theme.accent.opacity(0.55), lineWidth: 1.5)
+        )
+    }
+
+    private var expandedPitBoxHeader: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SETUP")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+                Text("PIT BOX")
+                    .font(.system(size: 22, weight: .heavy))
+                    .tracking(1.2)
+                    .foregroundColor(Theme.accent)
+            }
+            Spacer()
+            Button(action: collapsePitBox) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .heavy))
+                    .foregroundColor(Theme.accent)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle().fill(Theme.surfaceElevated)
+                    )
+                    .overlay(
+                        Circle().stroke(Theme.accent.opacity(0.45), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close pit box")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 12)
     }
 
     private var sessionFields: some View {
@@ -527,7 +688,6 @@ struct AddSessionView: View {
                     }
                 }
             }
-            Divider()
             Button {
                 showingAddTrack = true
             } label: {
@@ -554,7 +714,6 @@ struct AddSessionView: View {
                     }
                 }
             }
-            Divider()
             Button {
                 showingAddVehicle = true
             } label: {
@@ -719,36 +878,22 @@ struct AddSessionView: View {
         )
     }
 
-    private var notesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            collapsibleHeader(
-                title: "NOTES",
-                systemImage: "note.text",
-                isExpanded: isNotesExpanded
-            ) {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isNotesExpanded.toggle()
-                }
+    private var notesEditor: some View {
+        ZStack(alignment: .topLeading) {
+            if notes.isEmpty {
+                Text("Setup, conditions, thoughts…")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Theme.textTertiary)
+                    .padding(.top, 8)
+                    .padding(.leading, 4)
+                    .allowsHitTesting(false)
             }
-
-            if isNotesExpanded {
-                ZStack(alignment: .topLeading) {
-                    if notes.isEmpty {
-                        Text("Setup, conditions, thoughts…")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(Theme.textTertiary)
-                            .padding(.top, 8)
-                            .padding(.leading, 4)
-                            .allowsHitTesting(false)
-                    }
-                    TextEditor(text: $notes)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Theme.textPrimary)
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: 120)
-                        .focused($focusedField, equals: .notes)
-                }
-            }
+            TextEditor(text: $notes)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 120)
+                .focused($focusedField, equals: .notes)
         }
     }
 

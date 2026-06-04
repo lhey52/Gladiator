@@ -433,25 +433,35 @@ struct RaceEngineerView: View {
             let trackHeight: CGFloat = 6
             let thumbWidth: CGFloat = 6
             let thumbHeight: CGFloat = 32
-            let containerHeight: CGFloat = thumbHeight
+            let hintHeight: CGFloat = 16
+            let trackCenterY: CGFloat = thumbHeight / 2
+            let containerHeight: CGFloat = thumbHeight + hintHeight
             let thumbX = max(0, min(width, width * sliderPosition))
 
             ZStack {
                 sliderTrack(width: width, height: trackHeight, totalSessions: totalSessions)
+                    .frame(width: width, height: trackHeight)
+                    .position(x: width / 2, y: trackCenterY)
 
                 ForEach(1..<10, id: \.self) { i in
                     let pct = CGFloat(i) / 10.0
                     Rectangle()
                         .fill(Theme.surface)
                         .frame(width: 1, height: trackHeight)
-                        .position(x: width * pct, y: containerHeight / 2)
+                        .position(x: width * pct, y: trackCenterY)
                 }
 
                 RoundedRectangle(cornerRadius: thumbWidth / 2, style: .continuous)
                     .fill(Theme.accent)
                     .frame(width: thumbWidth, height: thumbHeight)
                     .shadow(color: Theme.accent.opacity(0.55), radius: 6)
-                    .position(x: thumbX, y: containerHeight / 2)
+                    .position(x: thumbX, y: trackCenterY)
+
+                // Drag affordance — a small caret beneath the thumb that
+                // pulses intermittently so first-time users register the
+                // track as a draggable control. Tracks the thumb horizontally.
+                dragHintTriangle
+                    .position(x: thumbX, y: thumbHeight + hintHeight / 2)
             }
             .frame(width: width, height: containerHeight)
             .contentShape(Rectangle())
@@ -465,7 +475,7 @@ struct RaceEngineerView: View {
                     }
             )
         }
-        .frame(height: 32)
+        .frame(height: 48)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Lower / higher split")
         .accessibilityValue("\(Int(round(sliderPosition * 100)))% lower, \(Int(round((1 - sliderPosition) * 100)))% higher")
@@ -482,6 +492,22 @@ struct RaceEngineerView: View {
         .onChange(of: sliderPosition) { _, _ in
             scheduleDebouncedPanelRefresh()
         }
+    }
+
+    // Pulsing caret that hints the slider is draggable. Cycles idle → pulse
+    // → hold, with a long dwell on idle so the pulse reads as intermittent
+    // rather than a constant throb.
+    private var dragHintTriangle: some View {
+        Image(systemName: "arrowtriangle.up.fill")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(Theme.accent)
+            .phaseAnimator(SliderHintPhase.allCases) { content, phase in
+                content
+                    .scaleEffect(phase.scale)
+                    .opacity(phase.opacity)
+            } animation: { phase in
+                phase.animation
+            }
     }
 
     private func sliderTrack(width: CGFloat, height: CGFloat, totalSessions: Int) -> some View {
@@ -587,11 +613,11 @@ struct RaceEngineerView: View {
         let higherPct = 100 - lowerPct
 
         return HStack(alignment: .center, spacing: 10) {
-            comparisonHeaderSide(label: "LOWER", percent: lowerPct, count: lowerCount, alignment: .leading)
+            comparisonHeaderSide(label: "LOWEST", percent: lowerPct, count: lowerCount, alignment: .leading)
             Text("Δ")
                 .font(.system(size: 16, weight: .heavy, design: .monospaced))
                 .foregroundColor(Theme.accent)
-            comparisonHeaderSide(label: "HIGHER", percent: higherPct, count: higherCount, alignment: .trailing)
+            comparisonHeaderSide(label: "HIGHEST", percent: higherPct, count: higherCount, alignment: .trailing)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -602,7 +628,7 @@ struct RaceEngineerView: View {
         let frameAlignment: Alignment = alignment == .leading ? .leading : .trailing
         let sessionWord = "\(count) session\(count == 1 ? "" : "s")"
 
-        return VStack(alignment: alignment, spacing: 4) {
+        return VStack(alignment: alignment, spacing: 3) {
             HStack(spacing: 6) {
                 if alignment == .trailing {
                     Spacer(minLength: 0)
@@ -626,6 +652,18 @@ struct RaceEngineerView: View {
                     Spacer(minLength: 0)
                 }
             }
+            // Spell out what the percentile is OF — the selected outcome
+            // metric — on its own line, in a lighter, non-monospaced style so
+            // it reads as a caption under the bold "LOWEST 42%".
+            (
+                Text("of ").foregroundColor(Theme.textTertiary)
+                    + Text(outcome).foregroundColor(Theme.textSecondary)
+            )
+            .font(.system(size: 11, weight: .semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .frame(maxWidth: .infinity, alignment: frameAlignment)
+
             Text(sessionWord.uppercased())
                 .font(.system(size: 10, weight: .heavy, design: .monospaced))
                 .tracking(1)
@@ -1014,6 +1052,38 @@ private struct DeltaIndicator: View {
                 .foregroundColor(isOutcome ? Theme.accent : Theme.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
+        }
+    }
+}
+
+// MARK: - Slider hint animation
+
+// Phases for the draggable-slider caret. The order is the cycle order:
+// idle → pulse → hold → idle … The `idle` arrival uses a long, no-op
+// animation (hold and idle share the same scale/opacity) which produces
+// the pause between pulses.
+private enum SliderHintPhase: CaseIterable {
+    case idle, pulse, hold
+
+    var scale: CGFloat {
+        switch self {
+        case .idle, .hold: return 1.0
+        case .pulse: return 1.35
+        }
+    }
+
+    var opacity: Double {
+        switch self {
+        case .idle, .hold: return 0.65
+        case .pulse: return 1.0
+        }
+    }
+
+    var animation: Animation {
+        switch self {
+        case .pulse: return .easeOut(duration: 0.35)
+        case .hold: return .easeIn(duration: 0.35)
+        case .idle: return .linear(duration: 1.6)
         }
     }
 }

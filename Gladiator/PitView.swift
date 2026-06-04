@@ -139,9 +139,8 @@ struct PitView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Theme.accent.opacity(0.25), lineWidth: 1.5)
+                    .stroke(Theme.hairline, lineWidth: 1)
             )
-            .shadow(color: Theme.accent.opacity(0.1), radius: 8, y: 3)
         }
         .buttonStyle(.plain)
     }

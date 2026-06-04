@@ -9,6 +9,8 @@ import SwiftData
 struct SessionDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
+    private var customFields: [CustomField]
 
     let session: Session
 
@@ -30,8 +32,8 @@ struct SessionDetailView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     headerCard
-                    if !sortedFieldValues.isEmpty {
-                        customFieldsCard
+                    ForEach(groupedFieldValues, id: \.zone) { group in
+                        zoneCard(zone: group.zone, values: group.values)
                     }
                     if !session.notes.trimmingCharacters(in: .whitespaces).isEmpty {
                         notesCard
@@ -71,14 +73,14 @@ struct SessionDetailView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingEdit, onDismiss: {
-            showSavedToast = true
-            Task {
-                try? await Task.sleep(for: .seconds(2))
-                showSavedToast = false
+        .sheet(isPresented: $showingEdit) {
+            EditSessionView(session: session) {
+                showSavedToast = true
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    showSavedToast = false
+                }
             }
-        }) {
-            EditSessionView(session: session)
         }
         .confirmationDialog(
             "Delete this session?",
@@ -151,10 +153,42 @@ struct SessionDetailView: View {
         session.fieldValues.sorted { $0.fieldName.localizedCompare($1.fieldName) == .orderedAscending }
     }
 
-    private var customFieldsCard: some View {
+    // Order the zone sections are shown in. General leads (rendered as
+    // "PIT DATA"), then the four corners, chassis, and engine. A zone only
+    // gets a card if the session actually has values assigned to it.
+    private static let zoneDisplayOrder: [CarZone] = [
+        .general, .flTire, .frTire, .blTire, .brTire, .chassis, .engine
+    ]
+
+    // Resolve a stored value's zone via its CustomField. Values whose metric
+    // was since deleted fall back to the zone encoded in the name prefix, and
+    // anything unrecognized lands in General / Pit Data.
+    private func zone(forFieldName name: String) -> CarZone {
+        if let field = customFields.first(where: { $0.name == name }) {
+            return field.zone
+        }
+        for zone in CarZone.carZones where !zone.metricNamePrefix.isEmpty && name.hasPrefix(zone.metricNamePrefix) {
+            return zone
+        }
+        return .general
+    }
+
+    private var groupedFieldValues: [(zone: CarZone, values: [FieldValue])] {
+        let grouped = Dictionary(grouping: sortedFieldValues) { zone(forFieldName: $0.fieldName) }
+        return Self.zoneDisplayOrder.compactMap { zone in
+            guard let values = grouped[zone], !values.isEmpty else { return nil }
+            return (zone, values)
+        }
+    }
+
+    private func zoneTitle(for zone: CarZone) -> String {
+        zone == .general ? "PIT DATA" : zone.displayName.uppercased()
+    }
+
+    private func zoneCard(zone: CarZone, values: [FieldValue]) -> some View {
         VStack(spacing: 0) {
             HStack {
-                Text("CUSTOM DATA")
+                Text(zoneTitle(for: zone))
                     .font(.system(size: 10, weight: .heavy))
                     .tracking(1.8)
                     .foregroundColor(Theme.accent)
@@ -164,11 +198,14 @@ struct SessionDetailView: View {
             .padding(.top, 14)
             .padding(.bottom, 10)
 
-            ForEach(Array(sortedFieldValues.enumerated()), id: \.element.id) { index, fv in
+            ForEach(Array(values.enumerated()), id: \.element.id) { index, fv in
                 if index > 0 {
                     Divider().background(Theme.hairline)
                 }
-                detailRow(label: fv.fieldName.uppercased(), value: displayValue(for: fv))
+                detailRow(
+                    label: CustomField.stripPrefix(from: fv.fieldName, zone: zone).uppercased(),
+                    value: displayValue(for: fv)
+                )
             }
         }
         .background(

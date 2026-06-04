@@ -147,9 +147,11 @@ struct AnalyticsView: View {
 
                         if AppConfig.isRaceEngineerEnabled {
                             AnalyticsCard(
-                                icon: "rectangle.split.2x1.fill",
+                                icon: "brain.head.profile",
                                 title: "Race Engineer",
-                                description: "Compare your setup across sessions to identify what changes between your best and worst results"
+                                description: "Compare your setup across sessions to identify what changes between your best and worst results",
+                                highlighted: true,
+                                showProBadge: true
                             ) {
                                 RaceEngineerView()
                             }
@@ -379,43 +381,62 @@ private struct AnalyticsCard<Destination: View>: View {
     let icon: String
     let title: String
     let description: String
+    // Only the highlighted card keeps the orange L-shaped bracket corners;
+    // the rest fall back to the quieter squared panel. `showProBadge` adds
+    // the same PRO chip used in the tab headers next to the title.
+    var highlighted: Bool = false
+    var showProBadge: Bool = false
     @ViewBuilder let destination: () -> Destination
 
     @State private var showingFullScreen: Bool = false
 
-    var body: some View {
-        Button { showingFullScreen = true } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Theme.accent.opacity(0.12))
-                        .frame(width: 42, height: 42)
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
-                        .frame(width: 42, height: 42)
-                    Image(systemName: icon)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(Theme.accent)
-                }
+    private var cardContent: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Theme.accent.opacity(0.12))
+                    .frame(width: 42, height: 42)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
+                    .frame(width: 42, height: 42)
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(Theme.accent)
+            }
 
-                VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
                     Text(title)
                         .font(.system(size: 15, weight: .heavy))
                         .foregroundColor(Theme.textPrimary)
-                    Text(description)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Theme.textSecondary)
-                        .lineLimit(2)
+                    if showProBadge {
+                        ProBadgeIfNeeded()
+                    }
                 }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Theme.textTertiary)
+                Text(description)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.textSecondary)
+                    .lineLimit(2)
             }
-            .padding(16)
-            .bracketPanel(.tile)
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(Theme.textTertiary)
+        }
+        .padding(16)
+    }
+
+    var body: some View {
+        Button { showingFullScreen = true } label: {
+            Group {
+                if highlighted {
+                    cardContent.bracketPanel(.tile)
+                } else {
+                    cardContent.squarePanel()
+                }
+            }
         }
         .buttonStyle(.plain)
         .fullScreenCover(isPresented: $showingFullScreen) {
