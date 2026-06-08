@@ -342,10 +342,16 @@ struct RaceEngineerView: View {
         let total = analysis.sortedSnapshots.count
         let sufficiency = DataSufficiencyLevel.from(smallerBucketSize: smallerBucketSize(for: analysis))
 
+        // Live split shares — derived from the immediate slider position so
+        // the end labels lead the debounced comparison header during a drag.
+        let lowerCountLive = liveSplitIndex(for: analysis)
+        let lowerPctLive = total > 0 ? Int(round(Double(lowerCountLive) / Double(total) * 100)) : 50
+        let higherPctLive = 100 - lowerPctLive
+
         return VStack(spacing: 14) {
             // Top label row
             HStack {
-                Label("SPLIT", systemImage: "square.split.2x1")
+                Label("ADJUST SPLIT", systemImage: "square.split.2x1")
                     .labelStyle(.titleAndIcon)
                     .font(.system(size: 9, weight: .heavy, design: .monospaced))
                     .tracking(1.4)
@@ -365,18 +371,37 @@ struct RaceEngineerView: View {
                 .lineLimit(2, reservesSpace: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            // End labels framing the track
+            // End labels framing the track. Each side carries its live share
+            // of the split so the LOWER/HIGHER ends visibly own a percentage,
+            // updating instantly as the thumb is dragged.
             HStack {
-                Text("LOWER")
-                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
-                    .tracking(1.4)
-                    .foregroundColor(Theme.textSecondary)
+                HStack(spacing: 5) {
+                    Text("LOWEST")
+                        .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                        .tracking(1.4)
+                        .foregroundColor(Theme.textSecondary)
+                    Text("\(lowerPctLive)%")
+                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundColor(Theme.accent)
+                        .contentTransition(.numericText())
+                        .splitSharePulse()
+                }
                 Spacer()
-                Text("HIGHER")
-                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
-                    .tracking(1.4)
-                    .foregroundColor(Theme.textSecondary)
+                HStack(spacing: 5) {
+                    Text("\(higherPctLive)%")
+                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                        .monospacedDigit()
+                        .foregroundColor(Theme.accent)
+                        .contentTransition(.numericText())
+                        .splitSharePulse()
+                    Text("HIGHEST")
+                        .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                        .tracking(1.4)
+                        .foregroundColor(Theme.textSecondary)
+                }
             }
+            .animation(.easeInOut(duration: 0.15), value: lowerPctLive)
 
             sliderControl(totalSessions: total)
 
@@ -494,20 +519,24 @@ struct RaceEngineerView: View {
         }
     }
 
-    // Pulsing caret that hints the slider is draggable. Cycles idle → pulse
-    // → hold, with a long dwell on idle so the pulse reads as intermittent
-    // rather than a constant throb.
+    // Pulsing left/right carets that hint the slider is draggable. The
+    // opposed triangles indicate the horizontal drag action. Cycles idle →
+    // pulse → hold, with a long dwell on idle so the pulse reads as
+    // intermittent rather than a constant throb.
     private var dragHintTriangle: some View {
-        Image(systemName: "arrowtriangle.up.fill")
-            .font(.system(size: 11, weight: .bold))
-            .foregroundColor(Theme.accent)
-            .phaseAnimator(SliderHintPhase.allCases) { content, phase in
-                content
-                    .scaleEffect(phase.scale)
-                    .opacity(phase.opacity)
-            } animation: { phase in
-                phase.animation
-            }
+        HStack(spacing: 5) {
+            Image(systemName: "arrowtriangle.left.fill")
+            Image(systemName: "arrowtriangle.right.fill")
+        }
+        .font(.system(size: 10, weight: .bold))
+        .foregroundColor(Theme.accent)
+        .phaseAnimator(SliderHintPhase.allCases) { content, phase in
+            content
+                .scaleEffect(phase.scale)
+                .opacity(phase.opacity)
+        } animation: { phase in
+            phase.animation
+        }
     }
 
     private func sliderTrack(width: CGFloat, height: CGFloat, totalSessions: Int) -> some View {
@@ -1081,9 +1110,51 @@ private enum SliderHintPhase: CaseIterable {
 
     var animation: Animation {
         switch self {
-        case .pulse: return .easeOut(duration: 0.35)
-        case .hold: return .easeIn(duration: 0.35)
-        case .idle: return .linear(duration: 1.6)
+        case .pulse: return .easeOut(duration: 0.47)
+        case .hold: return .easeIn(duration: 0.47)
+        case .idle: return .linear(duration: 2.13)
+        }
+    }
+}
+
+// Continuous attention pulse for the LOWEST/HIGHEST split shares so users
+// register them as the live readout. Shares the exact idle → pulse → hold →
+// idle timing of the drag caret (SliderHintPhase) so the two throb in sync,
+// with a gentler scale so the numbers don't fight the numeric roll.
+private enum SplitSharePulsePhase: CaseIterable {
+    case idle, pulse, hold
+
+    var scale: CGFloat {
+        switch self {
+        case .idle, .hold: return 1.0
+        case .pulse: return 1.18
+        }
+    }
+
+    var opacity: Double {
+        switch self {
+        case .idle, .hold: return 0.8
+        case .pulse: return 1.0
+        }
+    }
+
+    var animation: Animation {
+        switch self {
+        case .pulse: return .easeOut(duration: 0.47)
+        case .hold: return .easeIn(duration: 0.47)
+        case .idle: return .linear(duration: 2.13)
+        }
+    }
+}
+
+private extension View {
+    func splitSharePulse() -> some View {
+        phaseAnimator(SplitSharePulsePhase.allCases) { content, phase in
+            content
+                .scaleEffect(phase.scale)
+                .opacity(phase.opacity)
+        } animation: { phase in
+            phase.animation
         }
     }
 }

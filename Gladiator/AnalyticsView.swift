@@ -410,7 +410,7 @@ private struct AnalyticsCard<Destination: View>: View {
                         .font(.system(size: 15, weight: .heavy))
                         .foregroundColor(Theme.textPrimary)
                     if showProBadge {
-                        ProBadgeIfNeeded()
+                        ProBadgeView()
                     }
                 }
                 Text(description)
