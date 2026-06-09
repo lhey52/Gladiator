@@ -6,6 +6,20 @@
 import SwiftUI
 import SwiftData
 
+// How each comparison row renders the two sides. `average` shows the mean of
+// each side with a center delta bar; `range` drops the delta and shows the
+// min–max span of each side instead — a wider, scenario-builder style readout.
+private enum ComparisonValueMode: CaseIterable {
+    case average, range
+
+    var title: String {
+        switch self {
+        case .average: return "AVERAGES"
+        case .range: return "MIN – MAX"
+        }
+    }
+}
+
 struct RaceEngineerView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
@@ -18,6 +32,7 @@ struct RaceEngineerView: View {
     @State private var showingFilter: Bool = false
     @State private var showingOutcomePicker: Bool = false
     @State private var sliderPosition: Double = 0.5
+    @State private var comparisonMode: ComparisonValueMode = .average
     @State private var showingPaywall: Bool = false
     @State private var isInitialLoading: Bool = true
 
@@ -614,6 +629,7 @@ struct RaceEngineerView: View {
     private func comparisonReadoutPanel(analysis: AnalysisCache, panel: PanelCache) -> some View {
         VStack(spacing: 0) {
             comparisonHeaderStrip(panel: panel)
+            comparisonModeStrip()
             outcomeRow(analysis: analysis, panel: panel)
             ForEach(Array(panel.fieldOrder.enumerated()), id: \.element) { index, fieldName in
                 Rectangle()
@@ -702,6 +718,54 @@ struct RaceEngineerView: View {
         .frame(maxWidth: .infinity, alignment: frameAlignment)
     }
 
+    // Display-mode switch sitting between the split header and the value
+    // rows. Toggles every row below between the averaged readout (with the
+    // center delta bar) and the min–max span readout. Styled as a pill
+    // segmented control to read as a scenario-builder mode toggle.
+    private func comparisonModeStrip() -> some View {
+        VStack(spacing: 8) {
+            Text("SHOW VALUES AS")
+                .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                .tracking(2)
+                .foregroundColor(Theme.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+            HStack(spacing: 4) {
+                ForEach(ComparisonValueMode.allCases, id: \.self) { mode in
+                    comparisonModeSegment(mode)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity)
+        .background(Theme.background)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+        }
+    }
+
+    private func comparisonModeSegment(_ mode: ComparisonValueMode) -> some View {
+        let isSelected = comparisonMode == mode
+        return Button {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                comparisonMode = mode
+            }
+        } label: {
+            Text(mode.title)
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .tracking(1.2)
+                .foregroundColor(isSelected ? Theme.background : Theme.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(isSelected ? Theme.accent : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func outcomeRow(analysis: AnalysisCache, panel: PanelCache) -> some View {
         let leftAvg = panel.leftOutcomeAvg
         let rightAvg = panel.rightOutcomeAvg
@@ -719,33 +783,86 @@ struct RaceEngineerView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .frame(maxWidth: .infinity, alignment: .center)
-            HStack(alignment: .center, spacing: 12) {
-                Text(leftDisplay)
-                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(leftAvg == nil ? Theme.textTertiary : Theme.accent)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                DeltaIndicator(
-                    normalized: normalized,
-                    rightHigher: rightHigher,
-                    deltaText: signed.flatMap { formatSignedDelta($0, fieldType: analysis.outcomeFieldType) } ?? "—",
-                    isOutcome: true
+            if comparisonMode == .average {
+                HStack(alignment: .center, spacing: 12) {
+                    Text(leftDisplay)
+                        .font(.system(size: 22, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(leftAvg == nil ? Theme.textTertiary : Theme.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    DeltaIndicator(
+                        normalized: normalized,
+                        rightHigher: rightHigher,
+                        deltaText: signed.flatMap { formatSignedDelta($0, fieldType: analysis.outcomeFieldType) } ?? "—",
+                        isOutcome: true
+                    )
+                    .frame(maxWidth: .infinity)
+                    Text(rightDisplay)
+                        .font(.system(size: 22, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(rightAvg == nil ? Theme.textTertiary : Theme.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            } else {
+                rangePairRow(
+                    left: panel.leftOutcomeRange,
+                    right: panel.rightOutcomeRange,
+                    fieldType: analysis.outcomeFieldType,
+                    valueSize: 18,
+                    valueColor: Theme.accent
                 )
-                .frame(maxWidth: .infinity)
-                Text(rightDisplay)
-                    .font(.system(size: 22, weight: .heavy, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(rightAvg == nil ? Theme.textTertiary : Theme.accent)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
         .background(Theme.accent.opacity(0.05))
+    }
+
+    // Two-column min–max readout used by both the outcome and metric rows in
+    // Min–Max mode. The center delta indicator is dropped; a hairline divider
+    // splits the two sides so it reads as a side-by-side scenario comparison.
+    private func rangePairRow(left: FieldRange?, right: FieldRange?, fieldType: FieldType, valueSize: CGFloat, valueColor: Color) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            rangeSide(left, fieldType: fieldType, valueSize: valueSize, valueColor: valueColor, alignment: .leading)
+            Rectangle()
+                .fill(Theme.hairline)
+                .frame(width: 1, height: valueSize + 14)
+            rangeSide(right, fieldType: fieldType, valueSize: valueSize, valueColor: valueColor, alignment: .trailing)
+        }
+    }
+
+    private func rangeSide(_ range: FieldRange?, fieldType: FieldType, valueSize: CGFloat, valueColor: Color, alignment: HorizontalAlignment) -> some View {
+        let frameAlignment: Alignment = alignment == .leading ? .leading : .trailing
+        let hasData = range != nil
+        let single = range.map { $0.min == $0.max } ?? false
+        return VStack(alignment: alignment, spacing: 2) {
+            Text(rangeDisplay(range, fieldType: fieldType))
+                .font(.system(size: valueSize, weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(hasData ? valueColor : Theme.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(maxWidth: .infinity, alignment: frameAlignment)
+            Text(single ? "SINGLE" : "MIN – MAX")
+                .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                .tracking(1)
+                .foregroundColor(Theme.textTertiary)
+                .frame(maxWidth: .infinity, alignment: frameAlignment)
+        }
+    }
+
+    // "lo – hi" for a side's span, collapsing to a single value when the side
+    // holds one session (min == max) so it doesn't read as "12.3 – 12.3".
+    private func rangeDisplay(_ range: FieldRange?, fieldType: FieldType) -> String {
+        guard let range else { return "—" }
+        let lo = formatValue(range.min, fieldType: fieldType)
+        guard range.max > range.min else { return lo }
+        let hi = formatValue(range.max, fieldType: fieldType)
+        return "\(lo) – \(hi)"
     }
 
     private func metricRow(rank: Int, fieldName: String, analysis: AnalysisCache, panel: PanelCache) -> some View {
@@ -779,28 +896,38 @@ struct RaceEngineerView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .frame(maxWidth: .infinity, alignment: .center)
-                HStack(alignment: .center, spacing: 12) {
-                    Text(leftDisplay)
-                        .font(.system(size: 17, weight: .heavy, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundColor(leftAvg == nil ? Theme.textTertiary : Theme.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    DeltaIndicator(
-                        normalized: normalized,
-                        rightHigher: rightHigher,
-                        deltaText: signed.flatMap { formatSignedDelta($0, fieldType: fieldType) } ?? "—",
-                        isOutcome: false
+                if comparisonMode == .average {
+                    HStack(alignment: .center, spacing: 12) {
+                        Text(leftDisplay)
+                            .font(.system(size: 22, weight: .heavy, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundColor(leftAvg == nil ? Theme.textTertiary : Theme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        DeltaIndicator(
+                            normalized: normalized,
+                            rightHigher: rightHigher,
+                            deltaText: signed.flatMap { formatSignedDelta($0, fieldType: fieldType) } ?? "—",
+                            isOutcome: false
+                        )
+                        .frame(maxWidth: .infinity)
+                        Text(rightDisplay)
+                            .font(.system(size: 22, weight: .heavy, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundColor(rightAvg == nil ? Theme.textTertiary : Theme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                } else {
+                    rangePairRow(
+                        left: panel.leftRanges[fieldName],
+                        right: panel.rightRanges[fieldName],
+                        fieldType: fieldType,
+                        valueSize: 18,
+                        valueColor: Theme.textPrimary
                     )
-                    .frame(maxWidth: .infinity)
-                    Text(rightDisplay)
-                        .font(.system(size: 17, weight: .heavy, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundColor(rightAvg == nil ? Theme.textTertiary : Theme.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .padding(.horizontal, 14)
@@ -1256,6 +1383,12 @@ private struct PanelCache: Sendable {
     let leftAverages: [String: Double]
     let rightAverages: [String: Double]
     let normalizedDeltas: [String: Double]
+    // Per-side min–max spans, used by the Min–Max display mode. Keyed the
+    // same as the averages; outcome span is stored separately.
+    let leftOutcomeRange: FieldRange?
+    let rightOutcomeRange: FieldRange?
+    let leftRanges: [String: FieldRange]
+    let rightRanges: [String: FieldRange]
 
     static func compute(from analysis: AnalysisCache, sliderPosition: Double) -> PanelCache {
         let total = analysis.sortedSnapshots.count
@@ -1269,14 +1402,26 @@ private struct PanelCache: Sendable {
             return vals.reduce(0, +) / Double(vals.count)
         }
 
+        func range(_ slice: [RaceEngineerSnapshot], for name: String) -> FieldRange? {
+            let vals = slice.compactMap { $0.numericValues[name] }
+            guard let mn = vals.min(), let mx = vals.max() else { return nil }
+            return FieldRange(min: mn, max: mx)
+        }
+
         let leftOutcome = avg(leftSlice, for: analysis.outcome)
         let rightOutcome = avg(rightSlice, for: analysis.outcome)
+        let leftOutcomeRange = range(leftSlice, for: analysis.outcome)
+        let rightOutcomeRange = range(rightSlice, for: analysis.outcome)
 
         var leftAverages: [String: Double] = [:]
         var rightAverages: [String: Double] = [:]
+        var leftRanges: [String: FieldRange] = [:]
+        var rightRanges: [String: FieldRange] = [:]
         for name in analysis.fieldNames {
             if let l = avg(leftSlice, for: name) { leftAverages[name] = l }
             if let r = avg(rightSlice, for: name) { rightAverages[name] = r }
+            if let l = range(leftSlice, for: name) { leftRanges[name] = l }
+            if let r = range(rightSlice, for: name) { rightRanges[name] = r }
         }
 
         // Normalize each metric's between-panel delta by its own observed
@@ -1313,7 +1458,11 @@ private struct PanelCache: Sendable {
             fieldOrder: order,
             leftAverages: leftAverages,
             rightAverages: rightAverages,
-            normalizedDeltas: normalizedDeltas
+            normalizedDeltas: normalizedDeltas,
+            leftOutcomeRange: leftOutcomeRange,
+            rightOutcomeRange: rightOutcomeRange,
+            leftRanges: leftRanges,
+            rightRanges: rightRanges
         )
     }
 }

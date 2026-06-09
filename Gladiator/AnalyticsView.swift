@@ -147,9 +147,9 @@ struct AnalyticsView: View {
 
                         if AppConfig.isRaceEngineerEnabled {
                             AnalyticsCard(
-                                icon: "brain.head.profile",
+                                icon: "wrench.adjustable",
                                 title: "Race Engineer",
-                                description: "Compare your setup across sessions to identify what changes between your best and worst results",
+                                description: "Identify optimal setups for target outcomes",
                                 highlighted: true,
                                 showProBadge: true
                             ) {

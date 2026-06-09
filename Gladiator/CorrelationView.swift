@@ -8,7 +8,6 @@ import SwiftData
 
 struct CorrelationView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var iap = IAPManager.shared
     @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
     private var allFields: [CustomField]
     @Query(sort: [SortDescriptor(\Session.date, order: .reverse)])
@@ -19,7 +18,6 @@ struct CorrelationView: View {
 
     @State private var showingPickerA: Bool = false
     @State private var showingPickerB: Bool = false
-    @State private var showingPaywall: Bool = false
     @State private var filter = AnalyticsFilterState()
     @State private var showingFilter: Bool = false
     @State private var isLoading: Bool = true
@@ -94,37 +92,13 @@ struct CorrelationView: View {
         ScrollView {
             VStack(spacing: 20) {
                 fieldSelectors
-                ZStack {
-                    VStack(spacing: 20) {
-                        ToolDescriptionCard(text: "Measure the statistical relationship between two metrics across your sessions. Select two fields to compare — the tool calculates the Pearson coefficient, rates the strength and direction, and flags how reliable the result is based on sample size.")
-                        resultSection
-                        disclaimer
-                    }
-                    .blur(radius: iap.isProUser ? 0 : 6)
-                    .allowsHitTesting(iap.isProUser)
-
-                    if !iap.isProUser {
-                        Button { showingPaywall = true } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "lock.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                Text("UNLOCK PRO")
-                                    .font(.system(size: 13, weight: .heavy))
-                                    .tracking(1.5)
-                            }
-                            .foregroundColor(Theme.accent)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
-                            .background(Capsule().fill(Theme.surface))
-                            .overlay(Capsule().stroke(Theme.accent.opacity(0.5), lineWidth: 1))
-                        }
-                    }
+                VStack(spacing: 20) {
+                    ToolDescriptionCard(text: "Measure the statistical relationship between two metrics across your sessions. Select two fields to compare — the tool calculates the Pearson coefficient, rates the strength and direction, and flags how reliable the result is based on sample size.")
+                    resultSection
+                    disclaimer
                 }
             }
             .padding(20)
-        }
-        .fullScreenCover(isPresented: $showingPaywall) {
-            PaywallView()
         }
     }
 
