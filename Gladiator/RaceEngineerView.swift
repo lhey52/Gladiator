@@ -33,6 +33,7 @@ struct RaceEngineerView: View {
     @State private var showingOutcomePicker: Bool = false
     @State private var sliderPosition: Double = 0.5
     @State private var comparisonMode: ComparisonValueMode = .average
+    @State private var splitSectionExpanded: Bool = false
     @State private var showingPaywall: Bool = false
     @State private var isInitialLoading: Bool = true
 
@@ -170,22 +171,37 @@ struct RaceEngineerView: View {
             )
         } else {
             ScrollView {
-                VStack(spacing: 14) {
+                LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                     diagnosticHeader
+                        .padding(.horizontal, 18)
                     if outcome.isEmpty {
                         outcomePromptCard
+                            .padding(.horizontal, 18)
+                            .padding(.top, 14)
                     } else if hasAnalyzed, let analysis = analysisCache {
                         if analysis.sortedSnapshots.count >= 4 {
                             thresholdCursorPanel(analysis: analysis)
+                                .padding(.horizontal, 18)
+                                .padding(.top, 14)
                             if let panel = panelCache {
-                                comparisonReadoutPanel(analysis: analysis, panel: panel)
+                                resultsTitle
+                                    .padding(.top, 20)
+                                // Frozen pane: the split header + display toggle
+                                // pin to the top of the screen while the metric
+                                // rows scroll beneath them.
+                                Section {
+                                    resultsBody(analysis: analysis, panel: panel)
+                                } header: {
+                                    resultsPinnedHeader(panel: panel)
+                                }
                             }
                         } else {
                             notEnoughDataCard
+                                .padding(.horizontal, 18)
+                                .padding(.top, 14)
                         }
                     }
                 }
-                .padding(.horizontal, 18)
                 .padding(.top, 12)
                 .padding(.bottom, 28)
             }
@@ -364,7 +380,8 @@ struct RaceEngineerView: View {
         let higherPctLive = 100 - lowerPctLive
 
         return VStack(spacing: 14) {
-            // Top label row
+            // Top label row — the whole row is the collapse/expand target so
+            // users can tap anywhere across it, not just the chevron.
             HStack {
                 Label("ADJUST SPLIT", systemImage: "square.split.2x1")
                     .labelStyle(.titleAndIcon)
@@ -373,8 +390,22 @@ struct RaceEngineerView: View {
                     .foregroundColor(Theme.accent)
                 Spacer()
                 DataSufficiencyBadge(level: sufficiency)
+                Image(systemName: splitSectionExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundColor(Theme.textSecondary)
+                    .frame(width: 28, height: 28)
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    splitSectionExpanded.toggle()
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(splitSectionExpanded ? "Collapse split controls" : "Expand split controls")
 
+            if splitSectionExpanded {
             // Reliability blurb — tracks the sufficiency tier so the user
             // knows how much to trust the comparison before they touch the
             // slider. Always reserves two lines of vertical space so the
@@ -446,6 +477,7 @@ struct RaceEngineerView: View {
                 Spacer(minLength: 0)
             }
             .padding(.top, 2)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -622,14 +654,46 @@ struct RaceEngineerView: View {
 
     // MARK: - Comparison readout
 
-    // Spec-sheet style table. Header strip names the two sides, outcome row
-    // pinned at top with bracket emphasis, contributor rows ordered by
-    // normalized delta. Each row shows a thin delta bar indicating direction
-    // and magnitude, plus the signed numeric Δ.
-    private func comparisonReadoutPanel(analysis: AnalysisCache, panel: PanelCache) -> some View {
+    // "RESULTS" section label. Scrolls normally; the split header + display
+    // toggle below it are what freeze to the top of the screen.
+    private var resultsTitle: some View {
+        HStack(spacing: 12) {
+            Text("RESULTS")
+                .font(.system(size: 14, weight: .heavy, design: .monospaced))
+                .tracking(3)
+                .foregroundColor(Theme.accent)
+            Rectangle()
+                .fill(Theme.accent.opacity(0.25))
+                .frame(height: 1)
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 12)
+    }
+
+    // Frozen pane — the two-side split header (LOWEST/HIGHEST) and the
+    // AVERAGES / MIN–MAX display toggle. Used as a pinned section header so it
+    // sticks to the top of the screen while the metric rows scroll beneath it.
+    // Opaque background + hairline rails so scrolling rows hide cleanly behind.
+    private func resultsPinnedHeader(panel: PanelCache) -> some View {
         VStack(spacing: 0) {
             comparisonHeaderStrip(panel: panel)
             comparisonModeStrip()
+        }
+        .background(Theme.background)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+        }
+    }
+
+    // Scrolling body of the results table — outcome row pinned at the top of
+    // the data, then the contributor rows ordered by normalized delta. Each
+    // row shows a thin delta bar indicating direction and magnitude, plus the
+    // signed numeric Δ. Full width with a bottom hairline rail.
+    private func resultsBody(analysis: AnalysisCache, panel: PanelCache) -> some View {
+        VStack(spacing: 0) {
             outcomeRow(analysis: analysis, panel: panel)
             ForEach(Array(panel.fieldOrder.enumerated()), id: \.element) { index, fieldName in
                 Rectangle()
@@ -643,8 +707,10 @@ struct RaceEngineerView: View {
                 )
             }
         }
-        .bracketPanel(.hero)
-        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .background(Theme.surface)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+        }
     }
 
     // Comparison header — the place where the slider's effect on the split
@@ -812,7 +878,7 @@ struct RaceEngineerView: View {
                     left: panel.leftOutcomeRange,
                     right: panel.rightOutcomeRange,
                     fieldType: analysis.outcomeFieldType,
-                    valueSize: 18,
+                    valueSize: 22,
                     valueColor: Theme.accent
                 )
             }
@@ -925,7 +991,7 @@ struct RaceEngineerView: View {
                         left: panel.leftRanges[fieldName],
                         right: panel.rightRanges[fieldName],
                         fieldType: fieldType,
-                        valueSize: 18,
+                        valueSize: 22,
                         valueColor: Theme.textPrimary
                     )
                 }
