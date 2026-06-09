@@ -22,6 +22,20 @@ struct PaywallView: View {
         iap.products.first { $0.id == IAPManager.monthlyID }
     }
 
+    // Annual savings vs paying monthly for a year, computed from the live
+    // product prices so it tracks whatever tiers are set in App Store Connect.
+    // Falls back to the figure implied by the display-price defaults.
+    private var annualSavingsText: String? {
+        guard let annual = annualProduct?.price, let monthly = monthlyProduct?.price else {
+            return "SAVE 33%"
+        }
+        let annualValue = NSDecimalNumber(decimal: annual).doubleValue
+        let monthlyValue = NSDecimalNumber(decimal: monthly).doubleValue
+        guard monthlyValue > 0 else { return nil }
+        let percent = Int(((1 - annualValue / (monthlyValue * 12)) * 100).rounded())
+        return percent > 0 ? "SAVE \(percent)%" : nil
+    }
+
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
@@ -138,21 +152,32 @@ struct PaywallView: View {
             planCard(
                 id: IAPManager.annualID,
                 title: "ANNUAL",
-                price: annualProduct?.displayPrice ?? "$399.99/year",
-                subtitle: annualProduct.map { "\(formatMonthlyEquivalent($0))/month" } ?? "$33.33/month",
-                badge: "BEST VALUE"
+                price: annualProduct?.displayPrice ?? "$199.99/year",
+                subtitle: annualProduct.map { "\(formatMonthlyEquivalent($0))/month" } ?? "$16.67/month",
+                badge: "BEST VALUE",
+                savings: annualSavingsText
             )
             planCard(
                 id: IAPManager.monthlyID,
                 title: "MONTHLY",
-                price: monthlyProduct?.displayPrice ?? "$49.99/month",
+                price: monthlyProduct?.displayPrice ?? "$24.99/month",
                 subtitle: nil,
-                badge: nil
+                badge: nil,
+                savings: nil
             )
+
+            // Value framing — recode the price against a racer's actual spend
+            // rather than against other apps. A season of data for less than
+            // a single tire set reads as the cheapest thing they'll buy.
+            Text("Less than one set of tires — for a full season of setup data.")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 2)
         }
     }
 
-    private func planCard(id: String, title: String, price: String, subtitle: String?, badge: String?) -> some View {
+    private func planCard(id: String, title: String, price: String, subtitle: String?, badge: String?, savings: String? = nil) -> some View {
         let isSelected = selectedPlan == id
         return Button { selectedPlan = id } label: {
             HStack {
@@ -170,6 +195,15 @@ struct PaywallView: View {
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
                                 .background(Capsule().fill(Theme.accent))
+                        }
+                        if let savings {
+                            Text(savings)
+                                .font(.system(size: 9, weight: .heavy))
+                                .tracking(1)
+                                .foregroundColor(Theme.background)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(Theme.success))
                         }
                     }
                     Text(price)

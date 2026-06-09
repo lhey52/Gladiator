@@ -202,12 +202,28 @@ struct AddSessionView: View {
                 PaywallView(limitMessage: "You have reached the free limit of \(IAPManager.sessionLimit) sessions. Upgrade to Pro for unlimited sessions.")
             }
             .sheet(isPresented: $showingAddTrack) {
-                NavigationStack { TracksView() }
-                    .preferredColorScheme(.dark)
+                NavigationStack {
+                    TracksView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Cancel") { showingAddTrack = false }
+                                    .foregroundColor(Theme.textSecondary)
+                            }
+                        }
+                }
+                .preferredColorScheme(.dark)
             }
             .sheet(isPresented: $showingAddVehicle) {
-                NavigationStack { VehicleView() }
-                    .preferredColorScheme(.dark)
+                NavigationStack {
+                    VehicleView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Cancel") { showingAddVehicle = false }
+                                    .foregroundColor(Theme.textSecondary)
+                            }
+                        }
+                }
+                .preferredColorScheme(.dark)
             }
         }
         .preferredColorScheme(.dark)
@@ -403,7 +419,7 @@ struct AddSessionView: View {
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(Theme.accent)
-            Text("Tap any zone on the car to enter its metrics. Customize fields in Settings.")
+            Text("Tap any zone on the car to enter its metrics. Customize tracks, vehicles, and drivers in Settings.")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)

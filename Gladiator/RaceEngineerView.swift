@@ -34,6 +34,7 @@ struct RaceEngineerView: View {
     @State private var sliderPosition: Double = 0.5
     @State private var comparisonMode: ComparisonValueMode = .average
     @State private var splitSectionExpanded: Bool = false
+    @State private var isComputingPanel: Bool = false
     @State private var showingPaywall: Bool = false
     @State private var isInitialLoading: Bool = true
 
@@ -321,7 +322,7 @@ struct RaceEngineerView: View {
                 .font(.system(size: 11, weight: .heavy, design: .monospaced))
                 .tracking(2)
                 .foregroundColor(Theme.textSecondary)
-            Text("Pick the metric you want to diagnose — the tool will sort sessions by it and split them into a lower and higher group for side-by-side comparison.")
+            Text("Pick the metric you want to diagnose — the tool will sort sessions by it and divide them into a lower and higher cohort for side-by-side comparison.")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(Theme.textTertiary)
                 .multilineTextAlignment(.center)
@@ -383,7 +384,7 @@ struct RaceEngineerView: View {
             // Top label row — the whole row is the collapse/expand target so
             // users can tap anywhere across it, not just the chevron.
             HStack {
-                Label("ADJUST SPLIT", systemImage: "square.split.2x1")
+                Label("ADJUST COHORTS", systemImage: "square.split.2x1")
                     .labelStyle(.titleAndIcon)
                     .font(.system(size: 9, weight: .heavy, design: .monospaced))
                     .tracking(1.4)
@@ -403,7 +404,7 @@ struct RaceEngineerView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(splitSectionExpanded ? "Collapse split controls" : "Expand split controls")
+            .accessibilityLabel(splitSectionExpanded ? "Collapse cohort controls" : "Expand cohort controls")
 
             if splitSectionExpanded {
             // Reliability blurb — tracks the sufficiency tier so the user
@@ -433,6 +434,11 @@ struct RaceEngineerView: View {
                         .contentTransition(.numericText())
                         .splitSharePulse()
                 }
+                Spacer()
+                Text("vs")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .tracking(1)
+                    .foregroundColor(Theme.textTertiary)
                 Spacer()
                 HStack(spacing: 5) {
                     Text("\(higherPctLive)%")
@@ -549,7 +555,7 @@ struct RaceEngineerView: View {
         }
         .frame(height: 48)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Lower / higher split")
+        .accessibilityLabel("Lower / higher cohort split")
         .accessibilityValue("\(Int(round(sliderPosition * 100)))% lower, \(Int(round((1 - sliderPosition) * 100)))% higher")
         .accessibilityAdjustableAction { direction in
             switch direction {
@@ -678,6 +684,13 @@ struct RaceEngineerView: View {
         VStack(spacing: 0) {
             comparisonHeaderStrip(panel: panel)
             comparisonModeStrip()
+            // Loading indicator lives in the pinned header so it sits directly
+            // under the buttons and stays visible at any scroll position while
+            // the panel is (re)computing — not buried in the middle of the rows.
+            if isComputingPanel {
+                ResultsComputingBar()
+                    .transition(.opacity)
+            }
         }
         .background(Theme.background)
         .overlay(alignment: .top) {
@@ -711,6 +724,17 @@ struct RaceEngineerView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.hairline).frame(height: 1)
         }
+        // While (re)computing, dim the stale rows so they recede behind the
+        // loading bar pinned under the buttons above. The animated indicator
+        // itself lives in the pinned header so it's always on screen.
+        .overlay {
+            if isComputingPanel {
+                Rectangle()
+                    .fill(Theme.background.opacity(0.75))
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     // Comparison header — the place where the slider's effect on the split
@@ -725,8 +749,9 @@ struct RaceEngineerView: View {
 
         return HStack(alignment: .center, spacing: 10) {
             comparisonHeaderSide(label: "LOWEST", percent: lowerPct, count: lowerCount, alignment: .leading)
-            Text("Δ")
-                .font(.system(size: 16, weight: .heavy, design: .monospaced))
+            Text("vs")
+                .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                .tracking(1)
                 .foregroundColor(Theme.accent)
             comparisonHeaderSide(label: "HIGHEST", percent: higherPct, count: higherCount, alignment: .trailing)
         }
@@ -1103,7 +1128,16 @@ struct RaceEngineerView: View {
                     panelCache = panel
                     hasAnalyzed = true
                     isAnalyzing = false
+                    isComputingPanel = true
                 }
+            }
+            // Let the results section show its loading animation on first
+            // appearance before revealing the computed rows. Duration scales
+            // with dataset size: a 6s floor plus 0.25s per session.
+            let loadMs = max(6000, cache.sortedSnapshots.count * 250)
+            try? await Task.sleep(for: .milliseconds(loadMs))
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.2)) { isComputingPanel = false }
             }
         }
     }
@@ -1115,14 +1149,25 @@ struct RaceEngineerView: View {
         guard let cache = analysisCache else { return }
         debounceTask?.cancel()
         let position = sliderPosition
+        let loadMs = max(6000, cache.sortedSnapshots.count * 250)
+        withAnimation(.easeInOut(duration: 0.15)) { isComputingPanel = true }
         debounceTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(150))
             if Task.isCancelled { return }
-            let panel = await Task.detached(priority: .userInitiated) {
+            // Compute in the background while the loading animation runs for
+            // the calculated duration (6s floor + 0.25s per session), then
+            // reveal the fresh rows.
+            let computeTask = Task.detached(priority: .userInitiated) {
                 PanelCache.compute(from: cache, sliderPosition: position)
-            }.value
+            }
+            try? await Task.sleep(for: .milliseconds(loadMs))
             if Task.isCancelled { return }
-            panelCache = panel
+            let panel = await computeTask.value
+            if Task.isCancelled { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                panelCache = panel
+                isComputingPanel = false
+            }
         }
     }
 
@@ -1274,6 +1319,54 @@ private struct DeltaIndicator: View {
                 .foregroundColor(isOutcome ? Theme.accent : Theme.textSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
+        }
+    }
+}
+
+// MARK: - Results computing bar
+
+// Compact loading indicator shown in the pinned results header, directly under
+// the display-mode buttons, while the panel is (re)computing. A "RUNNING
+// NUMBERS" label sits beside an accent segment that sweeps back and forth along
+// a track, reading as an instrument crunching the data. Lives in the sticky
+// header so it stays on screen at any scroll position.
+private struct ResultsComputingBar: View {
+    @State private var animate = false
+    private let segmentFraction: CGFloat = 0.32
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("RUNNING NUMBERS")
+                .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                .tracking(1.5)
+                .foregroundColor(Theme.accent)
+                .fixedSize()
+
+            GeometryReader { geo in
+                let w = geo.size.width
+                let segmentWidth = max(24, w * segmentFraction)
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Theme.hairline)
+                        .frame(height: 3)
+                    Capsule()
+                        .fill(Theme.accent)
+                        .frame(width: segmentWidth, height: 3)
+                        .shadow(color: Theme.accent.opacity(0.6), radius: 4)
+                        .offset(x: animate ? w - segmentWidth : 0)
+                }
+                .frame(maxHeight: .infinity, alignment: .center)
+            }
+            .frame(height: 3)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity)
+        .background(Theme.background)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.65).repeatForever(autoreverses: true)) {
+                animate = true
+            }
         }
     }
 }

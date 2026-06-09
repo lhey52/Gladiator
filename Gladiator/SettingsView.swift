@@ -30,7 +30,7 @@ struct SettingsView: View {
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(Theme.accent)
-            Text("Use Session Customization to modify session tracks, metrics, vehicles, and drivers.")
+            Text("Use Session Customization to modify session tracks, vehicles, and drivers.")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Theme.textPrimary)
             Spacer()

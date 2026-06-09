@@ -160,37 +160,37 @@ enum GlossaryData {
         GlossaryTerm(
             id: "race-engineer",
             name: "Race Engineer",
-            definition: "A diagnostic tool that splits your sessions into two groups by a chosen outcome and compares your setup side by side, so you can see what changes between your best and worst results. You pick an Outcome; Race Engineer sorts every qualifying session by it and divides them at a draggable Split into a lower-outcome group and a higher-outcome group, then lists each metric with the difference between the two groups, largest difference first. Values can be shown as group Averages or as a Min–Max Range, and a Data Sufficiency badge flags how far to trust the result. Unlike Performance Predictor, which fits a regression model, Race Engineer is a direct descriptive comparison of two groups of sessions.",
+            definition: "A diagnostic tool that splits your sessions into two cohorts by a chosen outcome and compares your setup side by side, so you can see what changes between your best and worst results. You pick an Outcome; Race Engineer sorts every qualifying session by it and divides them at a draggable cohort split into a lower-outcome cohort and a higher-outcome cohort, then lists each metric with the difference between the two cohorts, largest difference first. Values can be shown as cohort Averages or as a Min–Max Range, and a Data Sufficiency badge flags how far to trust the result. Unlike Performance Predictor, which fits a regression model, Race Engineer is a direct descriptive comparison of two cohorts of sessions.",
             children: [
                 GlossaryChild(
                     id: "race-engineer-outcome",
                     name: "Outcome",
-                    definition: "The metric you choose to diagnose. Race Engineer sorts every qualifying session by this metric from lowest to highest and divides them into a lower group and a higher group. Because the split is built on the outcome, for a Time outcome the lower group is your faster sessions, and for a Number outcome it is your lower-scoring sessions. Only sessions that recorded a value for the chosen outcome are included."
+                    definition: "The metric you choose to diagnose. Race Engineer sorts every qualifying session by this metric from lowest to highest and divides them into a lower cohort and a higher cohort. Because the split is built on the outcome, for a Time outcome the lower cohort is your faster sessions, and for a Number outcome it is your lower-scoring sessions. Only sessions that recorded a value for the chosen outcome are included."
                 ),
                 GlossaryChild(
                     id: "split",
-                    name: "Split",
-                    definition: "The dividing point between the lower and higher groups, set with the draggable slider. Its position is shown as a percentile scale (P10–P90) and as a live percentage on each side, for example LOWEST 50% / HIGHEST 50%. Dragging toward an edge isolates the most extreme sessions on that side; centering it compares the bottom half against the top half. The smaller of the two groups is what limits reliability, so extreme splits lower the Data Sufficiency rating."
+                    name: "Cohort Split",
+                    definition: "The dividing point between the lower and higher cohorts, set with the draggable slider in the Adjust Cohorts panel. Its position is shown as a percentile scale (P10–P90) and as a live percentage on each side, for example LOWEST 50% vs 50% HIGHEST. Dragging toward an edge isolates the most extreme sessions on that side; centering it compares the bottom half against the top half. The smaller of the two cohorts is what limits reliability, so extreme splits lower the Data Sufficiency rating."
                 ),
                 GlossaryChild(
                     id: "comparison-delta",
                     name: "Delta (Δ)",
-                    definition: "The difference between the two groups for a metric, shown in Averages mode as a horizontal bar that extends from center toward the higher-value side with the signed value beneath it. Bar length is normalized by that metric's observed range across all analyzed sessions, so metrics on different scales — PSI, seconds, degrees — can be compared at a glance. The outcome row's bar is always drawn full width because it defines the axis the split is built on."
+                    definition: "The difference between the two cohorts for a metric, shown in Averages mode as a horizontal bar that extends from center toward the higher-value side with the signed value beneath it. Bar length is normalized by that metric's observed range across all analyzed sessions, so metrics on different scales — PSI, seconds, degrees — can be compared at a glance. The outcome row's bar is always drawn full width because it defines the axis the split is built on."
                 ),
                 GlossaryChild(
                     id: "race-engineer-min-max",
                     name: "Min–Max Range",
-                    definition: "One of two display modes, chosen with the SHOW VALUES AS toggle. Averages shows the mean of each group with the center Delta bar; Min–Max replaces that with the span of recorded values for each group — its lowest to highest value, for example 31.2 – 34.0 PSI. Min–Max reveals not just where each group sat on average but how much a metric actually varied within it: a wide span signals an inconsistent or experimental setup, a narrow span a setting held steady. When a group contains a single session its min and max are identical and the range collapses to one value, labelled SINGLE."
+                    definition: "One of two display modes, chosen with the SHOW VALUES AS toggle. Averages shows the mean of each cohort with the center Delta bar; Min–Max replaces that with the span of recorded values for each cohort — its lowest to highest value, for example 31.2 – 34.0 PSI. Min–Max reveals not just where each cohort sat on average but how much a metric actually varied within it: a wide span signals an inconsistent or experimental setup, a narrow span a setting held steady. When a cohort contains a single session its min and max are identical and the range collapses to one value, labelled SINGLE."
                 ),
                 GlossaryChild(
                     id: "contributor-ranking",
                     name: "Contributor Ranking",
-                    definition: "The order of the metric rows beneath the outcome. Metrics are ranked by the size of their normalized Delta between the two groups, so the setup values that differ most between your lower- and higher-outcome sessions appear first, and the top three are marked with a fading accent stripe down the left edge. A high-ranking metric is a candidate lever on your outcome — a starting point for on-track testing, not proof of cause."
+                    definition: "The order of the metric rows beneath the outcome. Metrics are ranked by the size of their normalized Delta between the two cohorts, so the setup values that differ most between your lower- and higher-outcome sessions appear first, and the top three are marked with a fading accent stripe down the left edge. A high-ranking metric is a candidate lever on your outcome — a starting point for on-track testing, not proof of cause."
                 ),
                 GlossaryChild(
                     id: "data-sufficiency",
                     name: "Data Sufficiency",
-                    definition: "A five-tier rating — Bad, Poor, Fair, Good, Excellent — indicating how trustworthy the comparison is. It is based on the size of the smaller of the two groups, since the weaker side limits reliability: fewer than 6 sessions → Bad, 6–10 → Poor, 11–15 → Fair, 16–24 → Good, 25 or more → Excellent. Moving the split toward an edge shrinks one group and can lower the rating. At the lower tiers, treat the differences as early indicators that may shift as you log more sessions."
+                    definition: "A five-tier rating — Bad, Poor, Fair, Good, Excellent — indicating how trustworthy the comparison is. It is based on the size of the smaller of the two cohorts, since the weaker side limits reliability: fewer than 6 sessions → Bad, 6–10 → Poor, 11–15 → Fair, 16–24 → Good, 25 or more → Excellent. Moving the split toward an edge shrinks one cohort and can lower the rating. At the lower tiers, treat the differences as early indicators that may shift as you log more sessions."
                 )
             ],
             seeAlso: ["Performance Predictor", "Session Comparison", "Correlation", "Standard Deviation"]
