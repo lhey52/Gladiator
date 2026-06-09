@@ -18,13 +18,14 @@ final class IAPManager: ObservableObject {
     // MARK: - Published state
 
     @Published var isLoading: Bool = false
+    @Published var isLoadingProducts: Bool = false
     @Published var errorMessage: String?
     @Published var products: [Product] = []
     @Published var codeGrantedPro: Bool {
         didSet { UserDefaults.standard.set(codeGrantedPro, forKey: "codeGrantedPro") }
     }
 
-    private var subscriptionActive: Bool = false
+    @Published private var subscriptionActive: Bool = false
 
     var isProUser: Bool {
         subscriptionActive || codeGrantedPro
@@ -35,9 +36,22 @@ final class IAPManager: ObservableObject {
     }
 
     private var updateTask: Task<Void, Never>?
+    private var hasStarted = false
 
     private init() {
+        // Cheap, synchronous only — so `isProUser` reflects a code grant
+        // immediately. The StoreKit work happens in start().
         codeGrantedPro = UserDefaults.standard.bool(forKey: "codeGrantedPro")
+    }
+
+    /// Starts the StoreKit transaction listener and loads initial state. Call
+    /// once at app launch (from `GladiatorApp`) so the `Transaction.updates`
+    /// listener is alive for the entire app lifetime — catching Ask-to-Buy
+    /// approvals, renewals, refunds, and cross-device purchases — instead of
+    /// starting lazily whenever a view first touches the singleton. Idempotent.
+    func start() {
+        guard !hasStarted else { return }
+        hasStarted = true
         updateTask = Task { await listenForTransactions() }
         Task { await checkSubscriptionStatus() }
         Task { await loadProducts() }
@@ -46,11 +60,14 @@ final class IAPManager: ObservableObject {
     // MARK: - Load products
 
     func loadProducts() async {
+        isLoadingProducts = true
+        errorMessage = nil
         do {
             products = try await Product.products(for: [Self.monthlyID, Self.annualID])
         } catch {
             errorMessage = "Unable to load products. Check your internet connection."
         }
+        isLoadingProducts = false
     }
 
     // MARK: - Purchase
@@ -110,8 +127,12 @@ final class IAPManager: ObservableObject {
                 }
             }
         }
-        subscriptionActive = hasActive
-        objectWillChange.send()
+        // `subscriptionActive` is @Published, so assigning it publishes the
+        // change automatically. Guard so a no-op refresh (e.g. the foreground
+        // re-check) doesn't needlessly re-render every Pro-gated view.
+        if hasActive != subscriptionActive {
+            subscriptionActive = hasActive
+        }
     }
 
     // MARK: - Limits

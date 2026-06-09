@@ -6,10 +6,15 @@
 import SwiftUI
 
 struct SupportView: View {
-    private let supportEmail = "SUPPORT_EMAIL_PLACEHOLDER"
-    private let privacyPolicyURL = URL(string: "PRIVACY_POLICY_URL_PLACEHOLDER")!
-    private let termsOfUseURL = URL(string: "TERMS_OF_USE_URL_PLACEHOLDER")!
+    @ObservedObject private var iap = IAPManager.shared
+
+    private let supportEmail = "support@blackforestcompany.com"
+    private let privacyPolicyURL = URL(string: "https://blackforestcompany.com/privacy-policy-gladiator/")!
+    private let termsOfUseURL = URL(string: "https://blackforestcompany.com/tc-gladiator/")!
     private let reviewURL = URL(string: "https://apps.apple.com/app/idYOUR_APP_ID")!
+
+    @State private var showRestoreAlert = false
+    @State private var restoreMessage = ""
 
     var body: some View {
         ZStack {
@@ -22,13 +27,26 @@ struct SupportView: View {
                     privacyRow
                     termsRow
                     reviewRow
+                    restoreRow
                 }
                 .padding(20)
                 .padding(.top, 4)
             }
+
+            if iap.isLoading {
+                Color.black.opacity(0.5).ignoresSafeArea()
+                ProgressView()
+                    .tint(Theme.accent)
+                    .scaleEffect(1.5)
+            }
         }
         .navigationTitle("Support")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Restore Purchases", isPresented: $showRestoreAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(restoreMessage)
+        }
     }
 
     private var contactRow: some View {
@@ -51,6 +69,27 @@ struct SupportView: View {
             settingsRow(
                 icon: "wand.and.stars",
                 title: "REQUEST A FEATURE",
+                subtitle: nil
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var restoreRow: some View {
+        Button {
+            Task {
+                await iap.restorePurchases()
+                if iap.isProUser {
+                    restoreMessage = "Your Gladiator Pro purchase has been restored."
+                } else {
+                    restoreMessage = iap.errorMessage ?? "No active purchases found to restore."
+                }
+                showRestoreAlert = true
+            }
+        } label: {
+            settingsRow(
+                icon: "arrow.clockwise",
+                title: "RESTORE PURCHASES",
                 subtitle: nil
             )
         }

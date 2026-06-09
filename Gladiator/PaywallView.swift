@@ -45,13 +45,29 @@ struct PaywallView: View {
                     dismissButton
                     heroSection
                     featuresSection
-                    pricingSection
-                    ctaButton
+                    // When products haven't loaded (offline / StoreKit
+                    // unavailable), don't show fake fallback prices behind a
+                    // dead button — show an explicit unavailable + retry state.
+                    if iap.products.isEmpty {
+                        productsUnavailableSection
+                    } else {
+                        pricingSection
+                        ctaButton
+                    }
                     restoreButton
                     legalText
+                    legalLinks
                     Color.clear.frame(height: 16)
                 }
                 .padding(.horizontal, 24)
+            }
+            .task {
+                // Retry the product fetch each time the paywall opens, not just
+                // once at app launch — so a user who was offline at launch can
+                // recover simply by opening the paywall after reconnecting.
+                if iap.products.isEmpty {
+                    await iap.loadProducts()
+                }
             }
 
             if iap.isLoading {
@@ -143,6 +159,54 @@ struct PaywallView: View {
                 .foregroundColor(Theme.textPrimary)
             Spacer()
         }
+    }
+
+    // MARK: - Products unavailable (offline / load failure)
+
+    private var productsUnavailableSection: some View {
+        VStack(spacing: 14) {
+            if iap.isLoadingProducts {
+                ProgressView()
+                    .tint(Theme.accent)
+                Text("LOADING SUBSCRIPTIONS…")
+                    .font(.system(size: 12, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textSecondary)
+            } else {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundColor(Theme.accent)
+                Text("SUBSCRIPTIONS UNAVAILABLE")
+                    .font(.system(size: 14, weight: .heavy))
+                    .tracking(1.5)
+                    .foregroundColor(Theme.textPrimary)
+                Text(iap.errorMessage ?? "Couldn't load subscription options. Check your connection and try again.")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                Button {
+                    Task { await iap.loadProducts() }
+                } label: {
+                    Text("Retry")
+                        .font(.system(size: 15, weight: .heavy))
+                        .tracking(1)
+                        .foregroundColor(Theme.background)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Theme.accent)
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(24)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surface)
+        )
     }
 
     // MARK: - Pricing
@@ -305,6 +369,24 @@ struct PaywallView: View {
             .font(.system(size: 11, weight: .semibold))
             .foregroundColor(Theme.textTertiary)
             .multilineTextAlignment(.center)
+    }
+
+    // Required by App Store Guideline 3.1.2 — Terms of Use (EULA) and
+    // Privacy Policy must be reachable from any subscription paywall.
+    private var legalLinks: some View {
+        HStack(spacing: 6) {
+            if let terms = URL(string: "https://blackforestcompany.com/tc-gladiator/") {
+                Link("Terms of Use", destination: terms)
+            }
+            Text("·")
+                .foregroundColor(Theme.textTertiary)
+            if let privacy = URL(string: "https://blackforestcompany.com/privacy-policy-gladiator/") {
+                Link("Privacy Policy", destination: privacy)
+            }
+        }
+        .font(.system(size: 11, weight: .heavy))
+        .tint(Theme.textSecondary)
+        .foregroundColor(Theme.textSecondary)
     }
 
     // MARK: - Helpers

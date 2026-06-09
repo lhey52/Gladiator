@@ -406,6 +406,21 @@ struct RaceEngineerView: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(splitSectionExpanded ? "Collapse cohort controls" : "Expand cohort controls")
 
+            // Hint footnote while collapsed so it's clear the row expands.
+            // Tappable too, so tapping the hint also expands the section.
+            if !splitSectionExpanded {
+                Text("Tap to expand and adjust the lower / higher cohort split.")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Theme.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            splitSectionExpanded.toggle()
+                        }
+                    }
+            }
+
             if splitSectionExpanded {
             // Reliability blurb — tracks the sufficiency tier so the user
             // knows how much to trust the comparison before they touch the
