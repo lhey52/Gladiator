@@ -16,6 +16,7 @@ struct ScatterPlotView: View {
 
     @AppStorage("scatterXField") private var storedXField: String = ""
     @AppStorage("scatterYField") private var storedYField: String = ""
+    @AppStorage("scatterPlotTipDismissed") private var scatterTipDismissed: Bool = false
 
     @State private var selectedPointID: String?
     @State private var showingXPicker: Bool = false
@@ -186,10 +187,48 @@ struct ScatterPlotView: View {
 
     private var mainContent: some View {
         VStack(spacing: 0) {
+            if !scatterTipDismissed {
+                scatterTip
+            }
             axisSelectorBar
             Divider().background(Theme.hairline)
             chartArea
         }
+    }
+
+    // Dismissible hint — re-shown by "Reset Tooltips" in Settings via the
+    // shared scatterPlotTipDismissed flag.
+    private var scatterTip: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Theme.accent)
+            Text("Tap a point to view its session details.")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button { scatterTipDismissed = true } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Theme.textTertiary)
+                    .frame(width: 24, height: 24)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
+        )
+        .shadow(color: Theme.accent.opacity(0.12), radius: 10, y: 4)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Axis selectors

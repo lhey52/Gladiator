@@ -28,6 +28,7 @@ struct SessionsView: View {
     @State private var sortColumn: SessionsTableColumn = .date
     @State private var sortAscending: Bool = false
     @AppStorage("sessionsTableColumns") private var columnsJSON: String = ""
+    @AppStorage("historyFieldsTipDismissed") private var historyTipDismissed: Bool = false
     @ObservedObject private var iap = IAPManager.shared
     @FocusState private var searchFocused: Bool
 
@@ -140,6 +141,9 @@ struct SessionsView: View {
                 VStack(spacing: 0) {
                     searchBar
                     filterBar
+                    if !historyTipDismissed, !sessions.isEmpty {
+                        historyTip
+                    }
                     content
                     limitBanner
                 }
@@ -332,6 +336,7 @@ struct SessionsView: View {
         if filteredSessions.isEmpty {
             emptyState
         } else {
+            GeometryReader { geo in
             ScrollView {
                 ScrollView(.horizontal, showsIndicators: false) {
                     VStack(spacing: 0) {
@@ -367,7 +372,78 @@ struct SessionsView: View {
                 .background(Theme.surface)
                 .padding(.bottom, 24)
             }
+            // Subtle hint when the table is wider than the screen, so users
+            // know there's more to see horizontally. Recomputes on rotation.
+            .overlay(alignment: .bottom) {
+                if tableContentWidth > geo.size.width {
+                    overflowFootnote
+                }
+            }
+            }
         }
+    }
+
+    // Estimated full width of the table (all enabled columns), to detect
+    // horizontal overflow past the visible viewport.
+    private var tableContentWidth: CGFloat {
+        let columns = displayColumns
+        guard !columns.isEmpty else { return 0 }
+        let columnsTotal = columns.reduce(CGFloat(0)) { $0 + Self.columnWidth(for: $1) }
+        let spacing = CGFloat(max(0, columns.count - 1)) * 8
+        let rowHorizontalPadding: CGFloat = 24 // .padding(.horizontal, 12)
+        let editingInset: CGFloat = isEditing ? 46 : 0
+        return columnsTotal + spacing + rowHorizontalPadding + editingInset
+    }
+
+    private var overflowFootnote: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.left.and.right")
+                .font(.system(size: 9, weight: .bold))
+            Text("History continues off screen — scroll or rotate to view.")
+                .font(.system(size: 10, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .foregroundColor(Theme.textSecondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Theme.surface.opacity(0.95)))
+        .overlay(Capsule().stroke(Theme.hairline, lineWidth: 1))
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
+        .padding(.bottom, 12)
+        .allowsHitTesting(false)
+    }
+
+    private var historyTip: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Theme.accent)
+            Text("Add or remove data points by tapping the Fields button.")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button { historyTipDismissed = true } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Theme.textTertiary)
+                    .frame(width: 24, height: 24)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
+        )
+        .shadow(color: Theme.accent.opacity(0.12), radius: 10, y: 4)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
     }
 
     // MARK: - Table layout (matches MetricLogView styling)

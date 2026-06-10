@@ -10,6 +10,8 @@ struct ResetView: View {
     @AppStorage("dashboardTipDismissed") private var dashboardTipDismissed: Bool = false
     @AppStorage("dashboardDeviceTipDismissed") private var dashboardDeviceTipDismissed: Bool = false
     @AppStorage("settingsCustomizationTipDismissed") private var settingsCustomizationTipDismissed: Bool = false
+    @AppStorage("scatterPlotTipDismissed") private var scatterPlotTipDismissed: Bool = false
+    @AppStorage("historyFieldsTipDismissed") private var historyFieldsTipDismissed: Bool = false
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial: Bool = false
     @State private var showingTooltipsConfirm: Bool = false
     @State private var showingTutorialConfirm: Bool = false
@@ -53,6 +55,8 @@ struct ResetView: View {
                 dashboardTipDismissed = false
                 dashboardDeviceTipDismissed = false
                 settingsCustomizationTipDismissed = false
+                scatterPlotTipDismissed = false
+                historyFieldsTipDismissed = false
             }
         } message: {
             Text("This will restore all dismissed tips. Continue?")

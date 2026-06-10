@@ -13,6 +13,8 @@ struct ResetsAdminView: View {
     @AppStorage("dashboardTipDismissed") private var dashboardTipDismissed: Bool = false
     @AppStorage("dashboardDeviceTipDismissed") private var dashboardDeviceTipDismissed: Bool = false
     @AppStorage("settingsCustomizationTipDismissed") private var settingsCustomizationTipDismissed: Bool = false
+    @AppStorage("scatterPlotTipDismissed") private var scatterPlotTipDismissed: Bool = false
+    @AppStorage("historyFieldsTipDismissed") private var historyFieldsTipDismissed: Bool = false
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial: Bool = false
 
     @State private var pendingAction: ResetAction?
@@ -146,6 +148,8 @@ struct ResetsAdminView: View {
             dashboardTipDismissed = false
             dashboardDeviceTipDismissed = false
             settingsCustomizationTipDismissed = false
+            scatterPlotTipDismissed = false
+            historyFieldsTipDismissed = false
         case .tutorial:
             hasSeenTutorial = false
         case .sessions:
