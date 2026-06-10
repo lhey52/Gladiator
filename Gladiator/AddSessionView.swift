@@ -206,7 +206,7 @@ struct AddSessionView: View {
                     TracksView()
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) {
-                                Button("Cancel") { showingAddTrack = false }
+                                Button("Done") { showingAddTrack = false }
                                     .foregroundColor(Theme.textSecondary)
                             }
                         }
@@ -218,7 +218,7 @@ struct AddSessionView: View {
                     VehicleView()
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) {
-                                Button("Cancel") { showingAddVehicle = false }
+                                Button("Done") { showingAddVehicle = false }
                                     .foregroundColor(Theme.textSecondary)
                             }
                         }

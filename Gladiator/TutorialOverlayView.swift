@@ -22,9 +22,13 @@ struct TutorialOverlayView: View {
     let onSkip: () -> Void
 
     @State private var arrowBounce: Bool = false
+    // Bumped shortly after appear to force a re-measure once the system tab bar
+    // has finished its initial layout (the first body pass can run pre-layout).
+    @State private var layoutRefresh: Int = 0
 
     var body: some View {
         GeometryReader { geo in
+            let _ = layoutRefresh
             let cutout = cutoutRect(in: geo)
             ZStack {
                 SpotlightShape(cutoutRect: cutout, cornerRadius: 16)
@@ -53,6 +57,15 @@ struct TutorialOverlayView: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .contentShape(Rectangle())
+            .onAppear {
+                Task {
+                    try? await Task.sleep(for: .milliseconds(120))
+                    layoutRefresh += 1
+                    #if DEBUG
+                    debugDumpTabBarHierarchy()
+                    #endif
+                }
+            }
         }
         .ignoresSafeArea()
     }
@@ -67,12 +80,32 @@ struct TutorialOverlayView: View {
     }
 
     private func tabCutout(in geo: GeometryProxy, index: Int, total: Int) -> CGRect {
+        // Prefer the live, measured tab-button frame so the highlight tracks the
+        // system tab bar regardless of how its metrics change between iOS versions.
+        // (The iOS 26 tab bar is taller and lays out its icons differently than
+        // iOS 18, which broke the old hardcoded estimate.)
+        if let button = measuredTabButtonRect(index: index, total: total) {
+            let cutoutWidth = min(button.width - 4, 96)
+            let cutoutHeight = min(button.height + 6, 64)
+            return CGRect(
+                x: button.midX - cutoutWidth / 2,
+                y: button.midY - cutoutHeight / 2,
+                width: cutoutWidth,
+                height: cutoutHeight
+            )
+        }
+        return estimatedTabCutout(in: geo, index: index, total: total)
+    }
+
+    /// Fallback used only when the real tab bar cannot be measured (e.g. not yet
+    /// laid out). Estimates the icon position from screen geometry.
+    private func estimatedTabCutout(in geo: GeometryProxy, index: Int, total: Int) -> CGRect {
         let tabWidth = geo.size.width / CGFloat(total)
         let centerX = tabWidth * CGFloat(index) + tabWidth / 2
         // Because this overlay uses .ignoresSafeArea, geo.safeAreaInsets returns zero.
         // Read the real bottom inset from the key window — gives the home-indicator gap (0 or ~34pt).
         let safeBottom = keyWindowBottomInset()
-        // The tab icon sits in the upper portion of the ~49pt bar content with the label beneath.
+        // The tab icon sits in the upper portion of the bar content with the label beneath.
         // Centering further down and making the cutout taller covers both icon and label cleanly.
         let iconCenterFromBarBottom: CGFloat = 20
         let centerY = geo.size.height - safeBottom - iconCenterFromBarBottom
@@ -85,6 +118,89 @@ struct TutorialOverlayView: View {
             height: cutoutHeight
         )
     }
+
+    /// Walks the key window to the live `UITabBar` and returns the frame of the
+    /// tab button at `index`, in window coordinates. Because this overlay ignores
+    /// the safe area, window coordinates map 1:1 to the GeometryReader space.
+    private func measuredTabButtonRect(index: Int, total: Int) -> CGRect? {
+        guard let window = keyWindow(),
+              let tabBar = firstTabBar(in: window) else { return nil }
+
+        let rects = tabBarButtonRects(in: tabBar, window: window)
+        guard rects.count == total, rects.indices.contains(index) else { return nil }
+        return rects[index]
+    }
+
+    /// Returns each tab button's frame in window coordinates, left-to-right.
+    ///
+    /// Found by recursive descent because the iOS 26 Liquid Glass tab bar nests
+    /// its buttons (class `_UITabButton`) inside container views rather than as
+    /// direct subviews of `UITabBar`. It also renders each button in two stacked
+    /// layers (selected / unselected), so the same button is found twice at the
+    /// same x — we dedupe by horizontal position. Falls back to leaf `UIControl`s
+    /// if the class name ever changes.
+    private func tabBarButtonRects(in tabBar: UITabBar, window: UIWindow) -> [CGRect] {
+        let byClassName = descendants(of: tabBar) {
+            String(describing: type(of: $0)).contains("TabButton")
+        }
+        let candidates = byClassName.isEmpty
+            ? descendants(of: tabBar) { view in
+                (view is UIControl) && !view.subviews.contains(where: { $0 is UIControl })
+              }
+            : byClassName
+
+        var seenX = Set<Int>()
+        var rects: [CGRect] = []
+        for view in candidates {
+            let rect = view.convert(view.bounds, to: window)
+            guard rect.width > 1, rect.height > 1 else { continue }
+            // Round to merge the duplicated stacked layers at the same position.
+            if seenX.insert(Int(rect.minX.rounded())).inserted {
+                rects.append(rect)
+            }
+        }
+        return rects.sorted { $0.minX < $1.minX }
+    }
+
+    private func descendants(of view: UIView, matching: (UIView) -> Bool) -> [UIView] {
+        var result: [UIView] = []
+        for sub in view.subviews {
+            if matching(sub) { result.append(sub) }
+            result.append(contentsOf: descendants(of: sub, matching: matching))
+        }
+        return result
+    }
+
+    private func firstTabBar(in view: UIView) -> UITabBar? {
+        if let tabBar = view as? UITabBar { return tabBar }
+        for sub in view.subviews {
+            if let found = firstTabBar(in: sub) { return found }
+        }
+        return nil
+    }
+
+    #if DEBUG
+    /// One-time console dump of the live tab bar hierarchy so the spotlight match
+    /// can be tuned to the real (per-iOS-version) view structure. Remove once the
+    /// highlight is confirmed aligned.
+    private static var didDumpTabBar = false
+    private func debugDumpTabBarHierarchy() {
+        guard !Self.didDumpTabBar else { return }
+        Self.didDumpTabBar = true
+        guard let window = keyWindow(), let tabBar = firstTabBar(in: window) else {
+            print("🧭 [Tutorial] No UITabBar found in key window — TabView may not be UIKit-backed on this OS.")
+            return
+        }
+        print("🧭 [Tutorial] UITabBar frame=\(tabBar.frame)")
+        func dump(_ v: UIView, depth: Int) {
+            let pad = String(repeating: "  ", count: depth)
+            let win = v.convert(v.bounds, to: window)
+            print("🧭 \(pad)\(type(of: v)) control=\(v is UIControl) win=\(win)")
+            v.subviews.forEach { dump($0, depth: depth + 1) }
+        }
+        tabBar.subviews.forEach { dump($0, depth: 1) }
+    }
+    #endif
 
     private func plusButtonCutout(in geo: GeometryProxy) -> CGRect {
         let safeTop = keyWindowTopInset()
@@ -103,22 +219,20 @@ struct TutorialOverlayView: View {
         )
     }
 
-    private func keyWindowBottomInset() -> CGFloat {
+    private func keyWindow() -> UIWindow? {
         UIApplication.shared
             .connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
-            .first(where: \.isKeyWindow)?
-            .safeAreaInsets.bottom ?? 34
+            .first(where: \.isKeyWindow)
+    }
+
+    private func keyWindowBottomInset() -> CGFloat {
+        keyWindow()?.safeAreaInsets.bottom ?? 34
     }
 
     private func keyWindowTopInset() -> CGFloat {
-        UIApplication.shared
-            .connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first(where: \.isKeyWindow)?
-            .safeAreaInsets.top ?? 47
+        keyWindow()?.safeAreaInsets.top ?? 47
     }
 
     private var animatedArrow: some View {

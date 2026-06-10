@@ -175,12 +175,28 @@ struct EditSessionView: View {
             .toolbar { navToolbar }
             .keyboardToolbar(focusedField: $focusedField, fields: allFields)
             .sheet(isPresented: $showingAddTrack) {
-                NavigationStack { TracksView() }
-                    .preferredColorScheme(.dark)
+                NavigationStack {
+                    TracksView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { showingAddTrack = false }
+                                    .foregroundColor(Theme.textSecondary)
+                            }
+                        }
+                }
+                .preferredColorScheme(.dark)
             }
             .sheet(isPresented: $showingAddVehicle) {
-                NavigationStack { VehicleView() }
-                    .preferredColorScheme(.dark)
+                NavigationStack {
+                    VehicleView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done") { showingAddVehicle = false }
+                                    .foregroundColor(Theme.textSecondary)
+                            }
+                        }
+                }
+                .preferredColorScheme(.dark)
             }
         }
         .preferredColorScheme(.dark)
