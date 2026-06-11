@@ -22,6 +22,7 @@ private enum SessionFormField: Hashable {
 
 struct AddSessionView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.requestReview) private var requestReview
     @Query(sort: [SortDescriptor(\CustomField.sortOrder)])
     private var customFields: [CustomField]
     @Query(sort: [SortDescriptor(\Track.name)])
@@ -278,7 +279,7 @@ struct AddSessionView: View {
     // directions so users can keep stepping forward without thinking
     // about edges.
     private static let baseZoneNavigationOrder: [CarZone] = [
-        .flTire, .frTire, .chassis, .engine, .blTire, .brTire
+        .flTire, .frTire, .chassis, .engine, .rlTire, .rrTire
     ]
 
     // Skip zones the user has hidden in Settings → Setup Zones so the
@@ -1062,6 +1063,8 @@ struct AddSessionView: View {
             showingPaywall = true
             return
         }
+        // Captured before insert: an empty list means this is their first session.
+        let isFirstSession = sessions.isEmpty
         let session = Session(
             date: date,
             trackName: trackName.trimmingCharacters(in: .whitespaces),
@@ -1081,6 +1084,15 @@ struct AddSessionView: View {
 
         resetForm()
         showToastBriefly(icon: "checkmark.circle.fill", text: "Session Saved")
+
+        // Ask for a review after their first saved session. Delayed so the
+        // "Session Saved" toast lands first, then the system prompt.
+        if isFirstSession && ReviewPrompt.isEligibleForFirstSession {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1.2))
+                ReviewPrompt.request(requestReview)
+            }
+        }
     }
 }
 

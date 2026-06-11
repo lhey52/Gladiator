@@ -141,7 +141,7 @@ struct PaywallView: View {
             featureRow("function", "Race Engineer Tool")
             featureRow("square.and.arrow.up", "Export & Share Data with Other Drivers")
             featureRow("infinity", "Unlimited Data Storage")
-            featureRow("clock.badge.checkmark", "7-Day Free Trial — Cancel Anytime")
+            featureRow("clock.badge.checkmark", "One time Free Trial — Cancel Anytime")
         }
         .padding(20)
         .background(
@@ -241,6 +241,12 @@ struct PaywallView: View {
         }
     }
 
+    // Trial length per plan. Must match the Introductory Offers configured in
+    // App Store Connect: annual = 7 days, monthly = 3 days.
+    private func trialDays(for planID: String) -> Int {
+        planID == IAPManager.annualID ? 7 : 3
+    }
+
     private func planCard(id: String, title: String, price: String, subtitle: String?, badge: String?, savings: String? = nil) -> some View {
         let isSelected = selectedPlan == id
         return Button { selectedPlan = id } label: {
@@ -278,7 +284,7 @@ struct PaywallView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Theme.textSecondary)
                     }
-                    Text("One time 7-day free trial included")
+                    Text("One time \(trialDays(for: id))-day free trial included")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Theme.accent.opacity(0.8))
                 }

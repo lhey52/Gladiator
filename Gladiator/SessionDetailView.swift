@@ -157,7 +157,7 @@ struct SessionDetailView: View {
     // "PIT DATA"), then the four corners, chassis, and engine. A zone only
     // gets a card if the session actually has values assigned to it.
     private static let zoneDisplayOrder: [CarZone] = [
-        .general, .flTire, .frTire, .blTire, .brTire, .chassis, .engine
+        .general, .flTire, .frTire, .rlTire, .rrTire, .chassis, .engine
     ]
 
     // Resolve a stored value's zone via its CustomField. Values whose metric

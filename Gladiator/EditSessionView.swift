@@ -228,7 +228,7 @@ struct EditSessionView: View {
     // directions so users can keep stepping forward without thinking
     // about edges.
     private static let baseZoneNavigationOrder: [CarZone] = [
-        .flTire, .frTire, .chassis, .engine, .blTire, .brTire
+        .flTire, .frTire, .chassis, .engine, .rlTire, .rrTire
     ]
 
     // Skip zones the user has hidden in Settings → Setup Zones so the

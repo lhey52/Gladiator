@@ -6,17 +6,14 @@
 import Foundation
 
 enum CarZone: String, CaseIterable, Codable, Identifiable {
-    // Raw values are stored on CustomField.zoneRaw so they need to stay
-    // stable across renames. `.chassis` was previously named `.cockpit`
-    // (rawValue "Cockpit"); CustomField.zone migrates legacy rows on
-    // read so existing assignments survive the rename. Legacy "Front" /
-    // "Rear" rawValues self-migrate to .general via the
-    // `CarZone(rawValue:) ?? .general` fallback in CustomField.zone now
-    // that those cases are gone.
+    // Raw values are stored on CustomField.zoneRaw. If a rawValue is renamed
+    // once the app has shipped, add a legacy mapping in CustomField.zone so
+    // existing rows still resolve (see the "Cockpit" -> .chassis example).
+    // Unknown rawValues fall back to .general via `CarZone(rawValue:) ?? .general`.
     case flTire = "FL Tire"
     case frTire = "FR Tire"
-    case blTire = "BL Tire"
-    case brTire = "BR Tire"
+    case rlTire = "RL Tire"
+    case rrTire = "RR Tire"
     case engine = "Engine"
     case chassis = "Chassis"
     case general = "General"
@@ -27,8 +24,8 @@ enum CarZone: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .flTire: return "Front Left"
         case .frTire: return "Front Right"
-        case .blTire: return "Back Left"
-        case .brTire: return "Back Right"
+        case .rlTire: return "Rear Left"
+        case .rrTire: return "Rear Right"
         case .engine: return "Engine and Drivetrain"
         case .chassis: return "Chassis"
         case .general: return "General"
@@ -44,8 +41,8 @@ enum CarZone: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .flTire: return "FL "
         case .frTire: return "FR "
-        case .blTire: return "RL "
-        case .brTire: return "RR "
+        case .rlTire: return "RL "
+        case .rrTire: return "RR "
         case .engine: return "Engine "
         case .chassis: return "Chassis "
         case .general: return ""
@@ -53,13 +50,13 @@ enum CarZone: String, CaseIterable, Codable, Identifiable {
     }
 
     static let pickerOrder: [CarZone] = [
-        .flTire, .frTire, .blTire, .brTire,
+        .flTire, .frTire, .rlTire, .rrTire,
         .engine, .chassis,
         .general
     ]
 
     static let carZones: [CarZone] = [
-        .flTire, .frTire, .blTire, .brTire,
+        .flTire, .frTire, .rlTire, .rrTire,
         .engine, .chassis
     ]
 }

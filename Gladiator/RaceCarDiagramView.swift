@@ -119,7 +119,7 @@ struct RaceCarDiagramView: View {
     // stock car) and the chassis sits behind it.
     static func layout(for zone: CarZone, style: VehicleStyle = .formula) -> (center: CGPoint, size: CGSize) {
         switch zone {
-        case .flTire, .frTire, .blTire, .brTire:
+        case .flTire, .frTire, .rlTire, .rrTire:
             return tireLayout(for: zone, style: style)
         case .chassis:
             switch style {
@@ -147,8 +147,8 @@ struct RaceCarDiagramView: View {
             switch zone {
             case .flTire: return (CGPoint(x: 0.13, y: 0.22), size)
             case .frTire: return (CGPoint(x: 0.87, y: 0.22), size)
-            case .blTire: return (CGPoint(x: 0.13, y: 0.78), size)
-            case .brTire: return (CGPoint(x: 0.87, y: 0.78), size)
+            case .rlTire: return (CGPoint(x: 0.13, y: 0.78), size)
+            case .rrTire: return (CGPoint(x: 0.87, y: 0.78), size)
             default: return (CGPoint.zero, CGSize.zero)
             }
         case .lateModel:
@@ -156,8 +156,8 @@ struct RaceCarDiagramView: View {
             switch zone {
             case .flTire: return (CGPoint(x: 0.20, y: 0.32), size)
             case .frTire: return (CGPoint(x: 0.80, y: 0.32), size)
-            case .blTire: return (CGPoint(x: 0.20, y: 0.68), size)
-            case .brTire: return (CGPoint(x: 0.80, y: 0.68), size)
+            case .rlTire: return (CGPoint(x: 0.20, y: 0.68), size)
+            case .rrTire: return (CGPoint(x: 0.80, y: 0.68), size)
             default: return (CGPoint.zero, CGSize.zero)
             }
         }
@@ -458,7 +458,7 @@ private struct ZoneCell: View {
 
     private var cornerRadius: CGFloat {
         switch zone {
-        case .flTire, .frTire, .blTire, .brTire: return 6
+        case .flTire, .frTire, .rlTire, .rrTire: return 6
         case .chassis: return 22
         case .engine: return 14
         case .general: return 6
@@ -506,7 +506,7 @@ private struct ZoneCell: View {
             zoneStates: [
                 .flTire: ZoneFillState(filled: 2, total: 2),
                 .frTire: ZoneFillState(filled: 1, total: 2),
-                .blTire: ZoneFillState(filled: 0, total: 1),
+                .rlTire: ZoneFillState(filled: 0, total: 1),
                 .engine: ZoneFillState(filled: 3, total: 3),
                 .chassis: ZoneFillState(filled: 1, total: 4)
             ],

@@ -17,6 +17,7 @@ struct ContentView: View {
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial: Bool = false
     @State private var isShowingTutorial: Bool = false
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.requestReview) private var requestReview
 
     init() {
         let appearance = UITabBarAppearance()
@@ -100,6 +101,13 @@ struct ContentView: View {
             DefaultMetricsLoader.loadIfNeeded(into: modelContext)
             if !hasSeenTutorial && !isShowingTutorial {
                 isShowingTutorial = true
+            }
+            ReviewPrompt.recordFirstOpenIfNeeded()
+            if ReviewPrompt.isEligibleByTime() {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1.5))
+                    ReviewPrompt.request(requestReview)
+                }
             }
         }
         .onChange(of: hasSeenTutorial) { _, newValue in

@@ -86,7 +86,7 @@ enum DefaultMetricsLoader {
             ("Middle Tire Temp", "degrees F", 1),
             ("Outside Tire Temp", "degrees F", 1)
         ]
-        let tireZones: [CarZone] = [.flTire, .frTire, .blTire, .brTire]
+        let tireZones: [CarZone] = [.flTire, .frTire, .rlTire, .rrTire]
 
         var all: [Spec] = []
         for zone in tireZones {

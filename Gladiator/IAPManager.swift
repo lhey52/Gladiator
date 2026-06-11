@@ -12,8 +12,8 @@ final class IAPManager: ObservableObject {
 
     // MARK: - Product IDs
 
-    static let monthlyID = "com.blackforestcompany.Gladiator.pro.monthly"
-    static let annualID = "com.blackforestcompany.Gladiator.pro.annual"
+    static let monthlyID = "com.blackforestcompany.Gladiator.ProMonthly"
+    static let annualID = "com.blackforestcompany.Gladiator.ProAnnual"
 
     // MARK: - Published state
 

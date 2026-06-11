@@ -69,8 +69,8 @@ enum DemoDataSeeder {
         let tireZones: [(zone: CarZone, phaseOffset: Double)] = [
             (.flTire, 0.0),
             (.frTire, 0.7),
-            (.blTire, 1.4),
-            (.brTire, 2.1)
+            (.rlTire, 1.4),
+            (.rrTire, 2.1)
         ]
         for tz in tireZones {
             out.append(Profile(zone: tz.zone, name: "Cold Tire Pressure", unit: "PSI",

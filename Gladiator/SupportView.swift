@@ -11,7 +11,7 @@ struct SupportView: View {
     private let supportEmail = "support@blackforestcompany.com"
     private let privacyPolicyURL = URL(string: "https://blackforestcompany.com/privacy-policy-gladiator/")!
     private let termsOfUseURL = URL(string: "https://blackforestcompany.com/tc-gladiator/")!
-    private let reviewURL = URL(string: "https://apps.apple.com/app/idYOUR_APP_ID")!
+    private let reviewURL = URL(string: "https://apps.apple.com/app/id6778624895?action=write-review")!
 
     @State private var showRestoreAlert = false
     @State private var restoreMessage = ""
