@@ -6,7 +6,7 @@
 import Foundation
 import SwiftData
 
-// Demo 1: 40 sessions at Seekonk Speedway with Vehicle One, one per
+// Demo 1: 40 sessions at Race Speedway with Vehicle One, one per
 // day going back 40 days, alternating Practice → Qualifying → Race.
 // Every session writes a realistic-looking value for each metric in
 // DefaultMetricsLoader (loaded automatically before sessions seed),
@@ -15,7 +15,7 @@ import SwiftData
 // deterministic — the same 40 sessions are produced every run.
 enum DemoDataSeeder {
 
-    private static let trackName = "Seekonk Speedway"
+    private static let trackName = "Race Speedway"
     private static let vehicleName = "Vehicle One"
     private static let sessionCount = 40
 

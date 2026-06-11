@@ -21,6 +21,10 @@ final class IAPManager: ObservableObject {
     @Published var isLoadingProducts: Bool = false
     @Published var errorMessage: String?
     @Published var products: [Product] = []
+    /// Product IDs the user is currently eligible to start a free trial on.
+    /// Empty when the trial has been used, no intro offer is configured, or
+    /// products haven't loaded yet.
+    @Published private(set) var trialEligibleProductIDs: Set<String> = []
     @Published var codeGrantedPro: Bool {
         didSet { UserDefaults.standard.set(codeGrantedPro, forKey: "codeGrantedPro") }
     }
@@ -64,10 +68,55 @@ final class IAPManager: ObservableObject {
         errorMessage = nil
         do {
             products = try await Product.products(for: [Self.monthlyID, Self.annualID])
+            await refreshTrialEligibility()
         } catch {
             errorMessage = "Unable to load products. Check your internet connection."
         }
         isLoadingProducts = false
+    }
+
+    // MARK: - Free trial / intro offer
+
+    /// True if any loaded plan still offers this user a free trial.
+    var hasTrialAvailable: Bool { !trialEligibleProductIDs.isEmpty }
+
+    /// Whether `productID` currently offers this user an unused free trial.
+    func isTrialEligible(_ productID: String) -> Bool {
+        trialEligibleProductIDs.contains(productID)
+    }
+
+    /// Human-readable length of a product's free-trial intro offer (e.g. "7-day",
+    /// "3-day", "1-month"), or nil if it has no free trial. Weeks are expressed in
+    /// days to match the paywall's "N-day free trial" copy.
+    func trialDurationText(for productID: String) -> String? {
+        guard let product = products.first(where: { $0.id == productID }),
+              let offer = product.subscription?.introductoryOffer,
+              offer.paymentMode == .freeTrial else { return nil }
+        let value = offer.period.value
+        switch offer.period.unit {
+        case .day: return "\(value)-day"
+        case .week: return "\(value * 7)-day"
+        case .month: return "\(value)-month"
+        case .year: return "\(value)-year"
+        @unknown default: return "\(value)-day"
+        }
+    }
+
+    /// Recomputes which products the user can still start a free trial on by
+    /// querying StoreKit intro-offer eligibility for each loaded subscription.
+    private func refreshTrialEligibility() async {
+        var eligible: Set<String> = []
+        for product in products {
+            guard let subscription = product.subscription,
+                  let offer = subscription.introductoryOffer,
+                  offer.paymentMode == .freeTrial else { continue }
+            if await subscription.isEligibleForIntroOffer {
+                eligible.insert(product.id)
+            }
+        }
+        if eligible != trialEligibleProductIDs {
+            trialEligibleProductIDs = eligible
+        }
     }
 
     // MARK: - Purchase
@@ -132,6 +181,12 @@ final class IAPManager: ObservableObject {
         // re-check) doesn't needlessly re-render every Pro-gated view.
         if hasActive != subscriptionActive {
             subscriptionActive = hasActive
+        }
+
+        // Trial eligibility can change with entitlements (e.g. a trial consumed
+        // on another device), so refresh it whenever products are available.
+        if !products.isEmpty {
+            await refreshTrialEligibility()
         }
     }
 

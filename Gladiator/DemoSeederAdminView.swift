@@ -37,7 +37,7 @@ struct DemoSeederAdminView: View {
         var subtitle: String {
             switch self {
             case .demo1:
-                return "Loads default metrics, then seeds 40 sessions at Seekonk Speedway with Vehicle One — full late-model data across tires, chassis, and race results."
+                return "Loads default metrics, then seeds 40 sessions at Race Speedway with Vehicle One — full late-model data across tires, chassis, and race results."
             case .defaultMetrics:
                 return "Loads the standard preloaded metrics for tire, chassis and general zones."
             }

@@ -141,7 +141,7 @@ struct PaywallView: View {
             featureRow("function", "Race Engineer Tool")
             featureRow("square.and.arrow.up", "Export & Share Data with Other Drivers")
             featureRow("infinity", "Unlimited Data Storage")
-            featureRow("clock.badge.checkmark", "One time Free Trial — Cancel Anytime")
+            featureRow("dollarsign.circle", "Less than one set of tires — for a full season of setup data.")
         }
         .padding(20)
         .background(
@@ -230,21 +230,17 @@ struct PaywallView: View {
                 savings: nil
             )
 
-            // Value framing — recode the price against a racer's actual spend
-            // rather than against other apps. A season of data for less than
-            // a single tire set reads as the cheapest thing they'll buy.
-            Text("Less than one set of tires — for a full season of setup data.")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.top, 2)
+            // Trial reassurance sits right above the CTA so the free-trial
+            // offer is the last thing a driver reads before subscribing. Hidden
+            // once the selected plan's trial has been used or isn't offered.
+            if iap.isTrialEligible(selectedPlan) {
+                Text("One time Free Trial — Cancel Anytime")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 2)
+            }
         }
-    }
-
-    // Trial length per plan. Must match the Introductory Offers configured in
-    // App Store Connect: annual = 7 days, monthly = 3 days.
-    private func trialDays(for planID: String) -> Int {
-        planID == IAPManager.annualID ? 7 : 3
     }
 
     private func planCard(id: String, title: String, price: String, subtitle: String?, badge: String?, savings: String? = nil) -> some View {
@@ -284,9 +280,11 @@ struct PaywallView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Theme.textSecondary)
                     }
-                    Text("One time \(trialDays(for: id))-day free trial included")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Theme.accent.opacity(0.8))
+                    if iap.isTrialEligible(id), let trial = iap.trialDurationText(for: id) {
+                        Text("One time \(trial) free trial included")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Theme.accent.opacity(0.8))
+                    }
                 }
                 Spacer()
                 ZStack {
@@ -335,7 +333,7 @@ struct PaywallView: View {
                     if iap.isProUser { dismiss() }
                 }
             } label: {
-                Text("Start Free Trial")
+                Text(iap.isTrialEligible(selectedPlan) ? "Start Free Trial" : "Subscribe")
                     .font(.system(size: 16, weight: .heavy))
                     .tracking(1)
                     .foregroundColor(Theme.background)
@@ -369,9 +367,9 @@ struct PaywallView: View {
     // MARK: - Legal
 
     private var legalText: some View {
-        Text(selectedPlan == IAPManager.annualID
-             ? "Cancel anytime. Billed annually after free trial ends."
-             : "Cancel anytime. Billed monthly after free trial ends.")
+        let period = selectedPlan == IAPManager.annualID ? "annually" : "monthly"
+        let trailing = iap.isTrialEligible(selectedPlan) ? " after free trial ends" : ""
+        return Text("Cancel anytime. Billed \(period)\(trailing).")
             .font(.system(size: 11, weight: .semibold))
             .foregroundColor(Theme.textTertiary)
             .multilineTextAlignment(.center)

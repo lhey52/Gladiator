@@ -304,10 +304,12 @@ struct AnalyticsView: View {
                                 .font(.system(size: 12, weight: .heavy))
                                 .tracking(1.5)
                         }
-                        Text("7 DAY FREE TRIAL")
-                            .font(.system(size: 10, weight: .heavy))
-                            .tracking(1.2)
-                            .foregroundColor(Theme.accent.opacity(0.8))
+                        if iap.hasTrialAvailable {
+                            Text("Free Trial Available")
+                                .font(.system(size: 10, weight: .heavy))
+                                .tracking(1.2)
+                                .foregroundColor(Theme.accent.opacity(0.8))
+                        }
                     }
                     .foregroundColor(Theme.accent)
                     .multilineTextAlignment(.center)
