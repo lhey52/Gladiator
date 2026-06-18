@@ -542,20 +542,12 @@ struct AddSessionView: View {
             .padding(.horizontal, 18)
             .background {
                 if state.hasMetrics {
+                    // Contrast-compensated cousin of the zones' Theme.zoneFill —
+                    // a step darker because this box sits on the darker panel
+                    // surface, not the lighter blueprint the zones sit on, so it
+                    // reads as the same shade in context. See Theme.pitBoxFill.
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(
-                            // Match a diagram zone's tone: ZoneCell only shows a
-                            // thin slice of the car-length chassis gradient, so each
-                            // zone reads as a near-uniform ~7% white. Extending the
-                            // gradient line well past the box reproduces that slice
-                            // here instead of the full 0.04→0.10 range, which read
-                            // darker at the top than the surrounding zones.
-                            LinearGradient(
-                                colors: [Theme.chassisFillTop, Theme.chassisFillBottom],
-                                startPoint: UnitPoint(x: 0.5, y: -3),
-                                endPoint: UnitPoint(x: 0.5, y: 3)
-                            )
-                        )
+                        .fill(Theme.pitBoxFill.opacity(0.85))
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(
                             state.filled > 0 ? Theme.accent : Theme.chassisLine,

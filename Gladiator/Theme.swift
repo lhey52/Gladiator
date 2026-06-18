@@ -23,6 +23,20 @@ enum Theme {
     static let chassisFillTop = Color.white.opacity(0.04)
     static let chassisFillBottom = Color.white.opacity(0.10)
     static let chassisLine = Color.white.opacity(0.14)
+
+    // Flat fill for an active setup-zone box (a zone with metrics). Opaque so
+    // every zone reads as the exact same shade regardless of where it sits on
+    // the car-length blueprint gradient. ~#2E2E2E.
+    static let zoneFill = Color(red: 0.181, green: 0.181, blue: 0.181)
+
+    // Pit Box fill. Same intent as zoneFill, but the Pit Box sits on the plain
+    // panel surface (Theme.surface) instead of the lighter blueprint gradient
+    // the zones sit on. Identical gray looks lighter against a darker surround
+    // (simultaneous contrast), so the Pit Box is nudged darker than zoneFill to
+    // read as the SAME shade in context. Tune this if the two still don't match:
+    // higher = lighter, lower = darker. Dialed-in offset: pitBoxFill ≈ zoneFill
+    // minus ~0.02 (kept while bumping both brighter together).
+    static let pitBoxFill = Color(red: 0.151, green: 0.151, blue: 0.151)
 }
 
 // Bracket-cornered panel styling shared across Race Engineer, Analytics, and

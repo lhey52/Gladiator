@@ -416,44 +416,22 @@ private struct ZoneCell: View {
         .disabled(!state.hasMetrics)
     }
 
-    // When a zone has metrics defined, draw a translucent fill that
-    // alpha-stacks with the unified blueprint's gradient — that's what
-    // gives the region a visibly distinct box. Empty zones (no metrics
-    // configured) blend into the blueprint silhouette.
+    // When a zone has metrics defined, draw a single flat opaque fill so every
+    // active zone reads as the exact same shade (Theme.zoneFill), independent of
+    // its position on the blueprint — the gradient slice this used to sample made
+    // each zone a slightly different tone. Empty zones (no metrics configured)
+    // blend into the blueprint silhouette.
     @ViewBuilder
     private var interiorOverlay: some View {
         if state.hasMetrics {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(zoneFill)
+                .fill(Theme.zoneFill.opacity(0.85))
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(
                     state.filled > 0 ? Theme.accent : Theme.chassisLine,
                     lineWidth: state.filled > 0 ? 1.5 : 1
                 )
         }
-    }
-
-    // Slice of the body's chassisFillTop → chassisFillBottom gradient,
-    // sampled at this zone's y range. Stacks on top of the blueprint
-    // fill to produce the distinct active-zone box.
-    private var zoneFill: LinearGradient {
-        let layout = RaceCarDiagramView.layout(for: zone, style: style)
-        let zoneH = layout.size.height
-        guard zoneH > 0 else {
-            return LinearGradient(
-                colors: [Theme.chassisFillBottom],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
-        let yTop = layout.center.y - zoneH / 2
-        let startY = -yTop / zoneH
-        let endY = (1 - yTop) / zoneH
-        return LinearGradient(
-            colors: [Theme.chassisFillTop, Theme.chassisFillBottom],
-            startPoint: UnitPoint(x: 0.5, y: startY),
-            endPoint: UnitPoint(x: 0.5, y: endY)
-        )
     }
 
     private var cornerRadius: CGFloat {

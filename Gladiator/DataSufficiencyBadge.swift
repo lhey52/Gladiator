@@ -39,11 +39,30 @@ extension DataSufficiencyLevel {
     var color: Color {
         switch self {
         case .bad: return Theme.danger
-        case .poor: return Theme.danger.mix(with: Theme.accent, by: 0.4)
+        case .poor: return Theme.danger.blended(with: Theme.accent, by: 0.4)
         case .fair: return Theme.warning
         case .good: return Theme.success
-        case .excellent: return Theme.success.mix(with: Theme.background, by: 0.35)
+        case .excellent: return Theme.success.blended(with: Theme.background, by: 0.35)
         }
+    }
+}
+
+private extension Color {
+    // iOS 17-compatible stand-in for `Color.mix(with:by:)` (iOS 18+). Resolves
+    // both colors to sRGB components via UIColor and linearly interpolates.
+    // `fraction` 0 returns self, 1 returns `other`.
+    func blended(with other: Color, by fraction: Double) -> Color {
+        let t = min(max(fraction, 0), 1)
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        UIColor(self).getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        UIColor(other).getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        return Color(
+            red: Double(r1 + (r2 - r1) * t),
+            green: Double(g1 + (g2 - g1) * t),
+            blue: Double(b1 + (b2 - b1) * t),
+            opacity: Double(a1 + (a2 - a1) * t)
+        )
     }
 }
 
